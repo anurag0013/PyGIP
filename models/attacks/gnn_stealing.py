@@ -284,7 +284,7 @@ def train_target_model_stl(self):
 
 
     def attack(self):
-        """执行攻击"""
+        
         G_QUERY = self.generate_query_graph()
         query_acc, query_preds, query_embs = self.query_target_model(G_QUERY)
         data = self.preprocess_query_response(G_QUERY, query_preds, query_embs)
