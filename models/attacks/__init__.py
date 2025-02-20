@@ -9,6 +9,8 @@ from .mea import (
 from .gnn_stealing import GNNStealing
 from .adversarial import AdversarialModelExtraction
 from .surrogate_extraction import SurrogateExtractionAttack
+from .data_free_attack import DataFreeAttack
+
 
 __all__ = [
     'ModelExtractionAttack0',
@@ -19,5 +21,6 @@ __all__ = [
     'ModelExtractionAttack5',
     'GNNStealing',
     'AdversarialModelExtraction',
-    'SurrogateExtractionAttack'
+    'SurrogateExtractionAttack',
+    'DataFreeAttack'
 ]
