@@ -1,6 +1,6 @@
-from datasets import *
-from models.attack import AdversarialModelExtraction
+from datasets import Cora
+from models.attack import ModelExtractionAttack0
 
 dataset = Cora()
-mea = AdversarialModelExtraction(dataset, 0.25)
+mea = ModelExtractionAttack0(dataset, 0.25)
 mea.attack()

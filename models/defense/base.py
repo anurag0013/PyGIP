@@ -20,9 +20,25 @@ class BaseDefense(ABC):
 
     @abstractmethod
     def defend(self):
-        """Execute the defense mechanism."""
+        """
+        Execute the defense mechanism.
+        """
         raise NotImplementedError
 
-    def evaluate(self):
-        """Evaluate the effectiveness of the defense."""
-        pass
+    def _train_target_model(self):
+        """
+        This is an optional method.
+        """
+        raise NotImplementedError
+
+    def _train_watermark_model(self):
+        """
+        This is an optional method.
+        """
+        raise NotImplementedError
+
+    def _train_surrogate_model(self):
+        """
+        This is an optional method.
+        """
+        raise NotImplementedError

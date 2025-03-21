@@ -26,13 +26,19 @@ class BaseAttack(ABC):
 
     @abstractmethod
     def attack(self):
-        """Execute the attack."""
+        """
+        Execute the attack.
+        """
         raise NotImplementedError
 
     def train_target_model(self):
-        """Train the target model if not provided."""
-        pass
+        """
+        Train the target model if not provided.
+        """
+        raise NotImplementedError
 
     def _load_model(self, model_path):
-        """Load a pre-trained model."""
-        pass
+        """
+        Load a pre-trained model.
+        """
+        raise NotImplementedError

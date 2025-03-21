@@ -25,7 +25,7 @@ class ModelExtractionAttack(BaseAttack):
         raise NotImplementedError
 
 
-class ModelExtractionAttack0(BaseAttack):
+class ModelExtractionAttack0(ModelExtractionAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
         super().__init__(dataset, attack_node_fraction, model_path)
         self.alpha = alpha
