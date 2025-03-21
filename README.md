@@ -76,6 +76,7 @@ A typical `defend()` workflow should include:
 
 - **Reference Implementation**: Check out `ModelExtractionAttack0` for a fully implemented attack class as an example.
 - **Dataset Access**: All datasets are standardized. Use `self.graph` to access the DGL-based graph data in your attack or defense class.
+- **Backbone Models**: We provide several basic backbone models like `GCN, GraphSAGE`. You can use or add more at `from models.nn import GraphSAGE`. 
 - **Helper Functions**: Feel free to add helper functions within your custom class to support your logic.
 
 ## License
