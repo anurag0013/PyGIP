@@ -1,26 +1,31 @@
-from ..base.attack import BaseAttack
-from ...utils.metrics import GraphNeuralNetworkMetric
-from ...utils.models import Gcn_Net
+import time
+
+import dgl
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch_geometric.utils import k_hop_subgraph, dense_to_sparse
-import numpy as np
-import dgl
 from tqdm import tqdm
+
+from models.attack.base import BaseAttack
+from utils.metrics import GraphNeuralNetworkMetric
+from models.nn import GCN
+
 
 class AdversarialModelExtraction(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction, model_path)
-        
+
     def attack(self):
         g = self.graph.clone()
         g_matrix = np.asmatrix(g.adjacency_matrix().to_dense())
-        edge_index=np.array(np.nonzero(g_matrix))
-        edge_index = th.tensor(edge_index, dtype=torch.long)
+        edge_index = np.array(np.nonzero(g_matrix))
+        edge_index = torch.tensor(edge_index, dtype=torch.long)
         # select a center node with certain size
         while True:
-            node_index = th.randint(0, self.node_number, (1,)).item()
-            sub_node_index, sub_edge_index, _, _ = k_hop_subgraph(node_index, 2, edge_index, relabel_nodes=True,num_nodes=self.node_number)
+            node_index = torch.randint(0, self.node_number, (1,)).item()
+            sub_node_index, sub_edge_index, _, _ = k_hop_subgraph(node_index, 2, edge_index, relabel_nodes=True,
+                                                                  num_nodes=self.node_number)
             if 10 <= sub_node_index.size(0) <= 150:
                 As = torch.zeros((sub_node_index.size(0), sub_node_index.size(0)))
                 As[sub_edge_index[0], sub_edge_index[1]] = 1
@@ -45,22 +50,22 @@ class AdversarialModelExtraction(BaseAttack):
         SA = [As]
         SX = [Xs]
         logits_query = self.net1(g, self.features)
-        _, labels_query = th.max(logits_query, dim=1)
+        _, labels_query = torch.max(logits_query, dim=1)
 
         src, dst = As.nonzero(as_tuple=True)
         initial_num_nodes = Xs.shape[0]
-        initial_graph = dgl.graph((src, dst), num_nodes= initial_num_nodes)
+        initial_graph = dgl.graph((src, dst), num_nodes=initial_num_nodes)
         initial_graph.ndata['feat'] = Xs
 
         self.net1.eval()
         initial_query = self.net1(initial_graph, initial_graph.ndata['feat'])
-        _, initial_label = th.max(initial_query, dim=1)
+        _, initial_label = torch.max(initial_query, dim=1)
 
         SL = initial_label.tolist()
-        n=10
+        n = 10
 
         for i in range(n):
-        # For each class, generate and store a new sampled subgraph
+            # For each class, generate and store a new sampled subgraph
             for c in range(self.label_number):
                 num_nodes = As.shape[0]
                 Ac = torch.ones((num_nodes, num_nodes))
@@ -78,14 +83,14 @@ class AdversarialModelExtraction(BaseAttack):
 
                 self.net1.eval()
                 api_query = self.net1(subgraph, subgraph.ndata['feat'])
-                _, label_query = th.max(api_query, dim=1)
+                _, label_query = torch.max(api_query, dim=1)
 
                 SL.extend(label_query.tolist())
 
         AG_list = [dense_to_sparse(torch.tensor(a))[0] for a in SA]
-        XG = th.vstack([th.tensor(x) for x in SX])
+        XG = torch.vstack([torch.tensor(x) for x in SX])
 
-        SL = th.tensor(SL, dtype=torch.long)
+        SL = torch.tensor(SL, dtype=torch.long)
 
         # Filter out invalid labels (negative labels) and trim the labels to match the feature matrix size
 
@@ -94,18 +99,18 @@ class AdversarialModelExtraction(BaseAttack):
         SL = SL[:XG.shape[0]]
 
         # Combine the edge indices of all subgraphs, adjusting the node indices to avoid overlap
-        AG_combined = torch.cat([edge_index + i * num_nodes for i, edge_index in enumerate(AG_list)], dim=1)# edge matrix
-        
+        AG_combined = torch.cat([edge_index + i * num_nodes for i, edge_index in enumerate(AG_list)],
+                                dim=1)  # edge matrix
 
         src, dst = AG_combined[0], AG_combined[1]
         num_total_nodes = XG.shape[0]
         sub_g = dgl.graph((src, dst), num_nodes=num_total_nodes)
         sub_g.ndata['feat'] = XG
-        
-        net6 = Gcn_Net(XG.shape[1], self.label_number)
 
-        optimizer = th.optim.Adam(net6.parameters(), lr=0.01, weight_decay=5e-4)
-        
+        net6 = GCN(XG.shape[1], self.label_number)
+
+        optimizer = torch.optim.Adam(net6.parameters(), lr=0.01, weight_decay=5e-4)
+
         dur = []
 
         print("=========Model Extracting==========================")
@@ -116,8 +121,8 @@ class AdversarialModelExtraction(BaseAttack):
 
             net6.train()
             logits = net6(sub_g, XG)
-            out=th.log_softmax(logits, dim=1)
-            loss = F.nll_loss(out,SL)
+            out = torch.log_softmax(logits, dim=1)
+            loss = F.nll_loss(out, SL)
 
             optimizer.zero_grad()
             loss.backward()

@@ -1,7 +1,7 @@
 import torch
-import torch.nn.functional as F
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 class GraphNeuralNetworkMetric:
     """
@@ -10,6 +10,7 @@ class GraphNeuralNetworkMetric:
     This class evaluates two metrics, fidelity and accuracy, for a given
     GNN model on a specified graph and features.
     """
+
     def __init__(self, fidelity=0, accuracy=0, model=None,
                  graph=None, features=None, mask=None,
                  labels=None, query_labels=None):
@@ -45,8 +46,8 @@ class GraphNeuralNetworkMetric:
     def __str__(self):
         """Returns a string representation of the metrics."""
         return f"Fidelity: {self.fidelity}, Accuracy: {self.accuracy}"
-    
-        @staticmethod
+
+    @staticmethod
     def calculate_surrogate_fidelity(target_model, surrogate_model, data, mask=None):
         """
         Calculate fidelity between target and surrogate model predictions.
@@ -62,30 +63,30 @@ class GraphNeuralNetworkMetric:
         """
         target_model.eval()
         surrogate_model.eval()
-        
+
         with torch.no_grad():
             # Get predictions from both models
             target_logits = target_model(data)
             surrogate_logits = surrogate_model(data)
-            
+
             # Apply mask if provided
             if mask is not None:
                 target_logits = target_logits[mask]
                 surrogate_logits = surrogate_logits[mask]
-            
+
             # Get predicted classes
             target_preds = target_logits.argmax(dim=1)
             surrogate_preds = surrogate_logits.argmax(dim=1)
-            
+
             # Calculate fidelity
             matches = (target_preds == surrogate_preds).sum().item()
             total = len(target_preds)
-            
+
             return (matches / total) * 100
 
     @staticmethod
-    def evaluate_surrogate_extraction(target_model, surrogate_model, data, 
-                                    train_mask=None, val_mask=None, test_mask=None):
+    def evaluate_surrogate_extraction(target_model, surrogate_model, data,
+                                      train_mask=None, val_mask=None, test_mask=None):
         """
         Comprehensive evaluation of surrogate extraction attack.
         
@@ -101,28 +102,28 @@ class GraphNeuralNetworkMetric:
             dict: Dictionary containing fidelity scores for different data splits
         """
         results = {}
-        
+
         # Overall fidelity
         results['overall_fidelity'] = GraphNeuralNetworkMetric.calculate_surrogate_fidelity(
             target_model, surrogate_model, data
         )
-        
+
         # Split-specific fidelity if masks are provided
         if train_mask is not None:
             results['train_fidelity'] = GraphNeuralNetworkMetric.calculate_surrogate_fidelity(
                 target_model, surrogate_model, data, train_mask
             )
-            
+
         if val_mask is not None:
             results['val_fidelity'] = GraphNeuralNetworkMetric.calculate_surrogate_fidelity(
                 target_model, surrogate_model, data, val_mask
             )
-            
+
         if test_mask is not None:
             results['test_fidelity'] = GraphNeuralNetworkMetric.calculate_surrogate_fidelity(
                 target_model, surrogate_model, data, test_mask
             )
-            
+
         return results
 
     def __str__(self):

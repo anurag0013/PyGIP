@@ -1,6 +1,6 @@
 from .models.base.attack import BaseAttack
 from .models.base.defense import BaseDefense
-from .models.attacks.mea import (
+from .models.attack.mea import (
     ModelExtractionAttack0,
     ModelExtractionAttack1, 
     ModelExtractionAttack2,
@@ -8,9 +8,9 @@ from .models.attacks.mea import (
     ModelExtractionAttack4,
     ModelExtractionAttack5
 )
-from .models.attacks.gnn_stealing import GNNStealing
-from .models.attacks.adversarial import AdversarialModelExtraction
-from .models.defenses.watermark import Watermark_sage
+from .models.attack.gnn_stealing import GNNStealing
+from .models.attack.adversarial import AdversarialModelExtraction
+from .models.defense.watermark import Watermark_sage
 from .utils.metrics import GraphNeuralNetworkMetric
 from .utils.models import Gcn_Net, Net_shadow, Net_attack
 

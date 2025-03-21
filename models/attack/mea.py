@@ -1,26 +1,38 @@
-from ..base.attack import BaseAttack
-from ...utils.metrics import GraphNeuralNetworkMetric
-from ...utils.models import Gcn_Net, Net_shadow, Net_attack
-import torch
-import torch.nn.functional as F
-import numpy as np
-import networkx as nx
-from dgl import DGLGraph
-import time
-from tqdm import tqdm
 import os
 import random
+import time
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import networkx as nx
+import numpy as np
+import torch
+import torch.nn.functional as F
+from dgl import DGLGraph
+from tqdm import tqdm
+
+from models.attack import BaseAttack
+from models.nn import GCN, ShadowNet, AttackNet
+from utils.metrics import GraphNeuralNetworkMetric
+
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
+
+
+class ModelExtractionAttack(BaseAttack):
+    def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
+        super().__init__(dataset, attack_node_fraction, model_path)
+
+    def attack(self):
+        raise NotImplementedError
+
 
 class ModelExtractionAttack0(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
         super().__init__(dataset, attack_node_fraction, model_path)
         self.alpha = alpha
-    
+
     def get_nonzero_indices(self, matrix_row):
         return np.where(matrix_row != 0)[0]
-    
+
     def attack(self):
         """
         Main attack procedure.
@@ -68,8 +80,8 @@ class ModelExtractionAttack0(BaseAttack):
                         for first_order_node_index in one_step_node_index:
                             this_node_degree = len(self.get_nonzero_indices(g_matrix[first_order_node_index]))
                             features_query[node_index] += (
-                                self.features[first_order_node_index] * self.alpha /
-                                torch.sqrt(torch.tensor(num_one_step * this_node_degree, device=device))
+                                    self.features[first_order_node_index] * self.alpha /
+                                    torch.sqrt(torch.tensor(num_one_step * this_node_degree, device=device))
                             )
 
                     two_step_nodes = []
@@ -77,12 +89,14 @@ class ModelExtractionAttack0(BaseAttack):
                         two_step_nodes.extend(self.get_nonzero_indices(g_matrix[first_order_node_index]).tolist())
 
                     total_two_step_node_index = list(set(two_step_nodes) - set(one_step_node_index))
-                    total_two_step_node_index = list(set(total_two_step_node_index).intersection(set(sub_graph_node_index)))
+                    total_two_step_node_index = list(
+                        set(total_two_step_node_index).intersection(set(sub_graph_node_index)))
 
                     num_two_step = len(total_two_step_node_index)
                     if num_two_step > 0:
                         for second_order_node_index in total_two_step_node_index:
-                            this_node_first_step_nodes = self.get_nonzero_indices(g_matrix[second_order_node_index]).tolist()
+                            this_node_first_step_nodes = self.get_nonzero_indices(
+                                g_matrix[second_order_node_index]).tolist()
                             this_node_second_step_nodes = set()
 
                             for nodes_in_this_node in this_node_first_step_nodes:
@@ -94,8 +108,8 @@ class ModelExtractionAttack0(BaseAttack):
 
                             if this_node_second_degree > 0:
                                 features_query[node_index] += (
-                                    self.features[second_order_node_index] * (1 - self.alpha) /
-                                    torch.sqrt(torch.tensor(num_two_step * this_node_second_degree, device=device))
+                                        self.features[second_order_node_index] * (1 - self.alpha) /
+                                        torch.sqrt(torch.tensor(num_two_step * this_node_second_degree, device=device))
                                 )
 
                 torch.cuda.empty_cache()
@@ -146,7 +160,7 @@ class ModelExtractionAttack0(BaseAttack):
             sub_g.ndata['norm'] = norm.unsqueeze(1)
 
             # Train extraction model
-            net = Gcn_Net(self.feature_number, self.label_number).to(device)
+            net = GCN(self.feature_number, self.label_number).to(device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             best_performance_metrics = GraphNeuralNetworkMetric()
 
@@ -299,7 +313,7 @@ class ModelExtractionAttack1(ModelExtractionAttack):
             norm = norm.to(device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
-            net = Net_shadow(self.feature_number, self.label_number).to(device)
+            net = ShadowNet(self.feature_number, self.label_number).to(device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -407,7 +421,7 @@ class ModelExtractionAttack2(ModelExtractionAttack):
             norm = norm.to(device)
             g.ndata['norm'] = norm.unsqueeze(1)
 
-            net_attack = Net_attack(self.node_number, self.label_number).to(device)
+            net_attack = AttackNet(self.node_number, self.label_number).to(device)
             optimizer_original = torch.optim.Adam(net_attack.parameters(), lr=5e-2, weight_decay=5e-4)
 
             dur = []
@@ -493,17 +507,17 @@ class ModelExtractionAttack3(ModelExtractionAttack):
 
             sub_graph_index_b = []
             with open(os.path.abspath(os.path.join(
-                defense_path,
-                '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
-                '/attack_6_sub_shadow_graph_index_attack_2.txt')), 'r') as fileObject:
+                    defense_path,
+                    '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
+                    '/attack_6_sub_shadow_graph_index_attack_2.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
             with open(os.path.abspath(os.path.join(
-                defense_path,
-                '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
-                '/protential_1300_shadow_graph_index.txt')), 'r') as fileObject:
+                    defense_path,
+                    '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
+                    '/protential_1300_shadow_graph_index.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 
@@ -675,15 +689,15 @@ class ModelExtractionAttack4(ModelExtractionAttack):
 
             sub_graph_index_b = []
             with open(os.path.abspath(os.path.join(
-                defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
-                '/target_graph_index.txt')), 'r') as fileObject:
+                    defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
+                                  '/target_graph_index.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
             with open(os.path.abspath(os.path.join(
-                defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
-                '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
+                    defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
+                                  '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 
@@ -735,7 +749,8 @@ class ModelExtractionAttack4(ModelExtractionAttack):
                         generated_graph[len(attack_features) + j][i] = 1
                         break
                     if loop > 500:
-                        if np.linalg.norm(generated_features[i] - generated_features[len(attack_features) + j]) < max_threshold:
+                        if np.linalg.norm(
+                                generated_features[i] - generated_features[len(attack_features) + j]) < max_threshold:
                             generated_graph[i][len(attack_features) + j] = 1
                             generated_graph[len(attack_features) + j][i] = 1
                             break
@@ -880,17 +895,17 @@ class ModelExtractionAttack5(ModelExtractionAttack):
 
             sub_graph_index_b = []
             with open(os.path.abspath(os.path.join(
-                defense_path,
-                '../../../pygip/data/' + self.dataset.dataset_name +
-                '/target_graph_index.txt')), 'r') as fileObject:
+                    defense_path,
+                    '../../../pygip/data/' + self.dataset.dataset_name +
+                    '/target_graph_index.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
             with open(os.path.abspath(os.path.join(
-                defense_path,
-                '../../../pygip/data/' + self.dataset.dataset_name +
-                '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
+                    defense_path,
+                    '../../../pygip/data/' + self.dataset.dataset_name +
+                    '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 

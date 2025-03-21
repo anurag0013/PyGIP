@@ -1,22 +1,21 @@
-from ..base.defense import BaseDefense
-from ...utils.metrics import GraphNeuralNetworkMetric
-from ...utils.models import Gcn_Net
+import inspect
+import os
 
-import networkx as nx
+import dgl
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from dgl.dataloading import NeighborSampler, NodeCollator
 from torch.utils.data import DataLoader
 from torch_geometric.utils import erdos_renyi_graph
-from dgl.dataloading import NeighborSampler, NodeCollator
-from dgl.nn import SAGEConv
-import dgl
 from tqdm import tqdm
-import os
-import inspect
+
+from models.attack import *
+from models.nn import GCN, GraphSAGE
+from utils.metrics import GraphNeuralNetworkMetric
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 class graph_to_dataset:
     """
@@ -27,6 +26,7 @@ class graph_to_dataset:
     2. Retrieve and process node features, labels, as well as train/test masks.
     3. Ensure that all tensors are on the specified device (device).
     """
+
     def __init__(self, graph, attack_node_fraction, name=None):
         """
         Initializes graph_to_dataset.
@@ -91,6 +91,7 @@ class WatermarkGraph:
     then randomly generates node features and labels, and finally creates a DGLGraph
     with the generated information.
     """
+
     def __init__(self, n, num_features, num_classes, pr=0.1, pg=0, device=device):
         """
         Initializes WatermarkGraph.
@@ -147,58 +148,13 @@ class WatermarkGraph:
         return data
 
 
-class GraphSAGE(nn.Module):
-    """
-    A GraphSAGE model implemented with PyG's SAGEConv module.
-
-    It consists of two SAGEConv layers:
-    - The first layer projects features to 'hidden_channels',
-    - The second layer outputs 'out_channels'.
-    """
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        """
-        Initializes the GraphSAGE model.
-
-        Parameters
-        ----------
-        in_channels : int
-            The dimensionality of the input features.
-        hidden_channels : int
-            The dimensionality of the hidden layer.
-        out_channels : int
-            The dimensionality of the output layer (or the number of classes).
-        """
-        super(GraphSAGE, self).__init__()
-        self.conv1 = SAGEConv(in_channels, hidden_channels, aggregator_type='mean')
-        self.conv2 = SAGEConv(hidden_channels, out_channels, aggregator_type='mean')
-
-    def forward(self, blocks, x):
-        """
-        Forward pass.
-
-        Parameters
-        ----------
-        blocks : list of dgl.DGLGraph
-            A list of subgraphs sampled for multiple layers.
-        x : torch.Tensor
-            The node features of shape (num_nodes, in_channels).
-
-        Returns
-        -------
-        torch.Tensor
-            The model outputs (logits) of shape (num_nodes, out_channels).
-        """
-        x = self.conv1(blocks[0], x)
-        x = F.relu(x)
-        x = self.conv2(blocks[1], x)
-        return x
-    
 class Defense:
     """
     A base class for defense (or watermark) operations.
     In this example, it is mainly used to merge watermark graphs with
-    existing datasets or perform subsequent model extraction attacks.
+    existing datasets or perform subsequent model extraction attack.
     """
+
     def __init__(self, dataset, attack_node_fraction):
         """
         Initializes the Defense class.
@@ -336,7 +292,7 @@ class Defense:
 
     def generate_extended_label_file(self, datasetCora_merge, original_node_count, new_node_count, output_file):
         """
-        Generates or extends a label file for subsequent attacks.
+        Generates or extends a label file for subsequent attack.
 
         Parameters
         ----------
@@ -398,17 +354,20 @@ class Defense:
                 # Example for the Cora dataset
                 original_node_count = 2708
                 new_node_count = 50
-                output_file = os.path.abspath(os.path.join(defense_path, 
-                    "../../../pygip/data/attack2_generated_graph/cora/query_labels_cora.txt"))
+                output_file = os.path.abspath(os.path.join(defense_path,
+                                                           "../../../pygip/data/attack2_generated_graph/cora/query_labels_cora.txt"))
                 print("Current working directory:", output_file)
                 self.generate_extended_label_file(datasetCora_merge, original_node_count, new_node_count, output_file)
 
                 attack = ModelExtractionAttack1(
-                    datasetCora_merge, 
-                    0.25, 
-                    os.path.abspath(os.path.join(defense_path, "../../../pygip/data/attack2_generated_graph/cora/selected_index.txt")),
-                    os.path.abspath(os.path.join(defense_path, "../../../pygip/data/attack2_generated_graph/cora/query_labels_cora.txt")),
-                    os.path.abspath(os.path.join(defense_path, "../../../pygip/data/attack2_generated_graph/cora/graph_label0_564_541.txt"))
+                    datasetCora_merge,
+                    0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/cora/selected_index.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/cora/query_labels_cora.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/cora/graph_label0_564_541.txt"))
                 )
                 attack.attack()
                 flag = True
@@ -422,17 +381,17 @@ class Defense:
                 flag = True
             elif (attack_name == 5):
                 attack = ModelExtractionAttack4(
-                    datasetCora_merge, 0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/models/attack_3_subgraph_shadow_model_cora_8159.pkl"))
+                    datasetCora_merge, 0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/models/attack_3_subgraph_shadow_model_cora_8159.pkl"))
                 )
                 attack.attack()
                 flag = True
             else:
                 attack = ModelExtractionAttack5(
-                    datasetCora_merge, 0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/models/attack_3_subgraph_shadow_model_cora_8159.pkl"))
+                    datasetCora_merge, 0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/models/attack_3_subgraph_shadow_model_cora_8159.pkl"))
                 )
                 attack.attack()
                 flag = True
@@ -446,19 +405,19 @@ class Defense:
             elif (attack_name == 2):
                 original_node_count = 3327
                 new_node_count = 50
-                output_file = os.path.abspath(os.path.join(defense_path, 
-                    "../../../pygip/data/attack2_generated_graph/citeseer/query_labels_citeseer.txt"))
+                output_file = os.path.abspath(os.path.join(defense_path,
+                                                           "../../../pygip/data/attack2_generated_graph/citeseer/query_labels_citeseer.txt"))
                 self.generate_extended_label_file(datasetCora_merge, original_node_count, new_node_count, output_file)
 
                 attack = ModelExtractionAttack1(
-                    datasetCora_merge, 
-                    0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/citeseer/selected_index.txt")),
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/citeseer/query_labels_citeseer.txt")),
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/citeseer/graph_label0_604_525.txt"))
+                    datasetCora_merge,
+                    0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/citeseer/selected_index.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/citeseer/query_labels_citeseer.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/citeseer/graph_label0_604_525.txt"))
                 )
                 attack.attack()
                 flag = True
@@ -472,17 +431,17 @@ class Defense:
                 flag = True
             elif (attack_name == 5):
                 attack = ModelExtractionAttack4(
-                    datasetCora_merge, 0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        '../../../pygip/models/attack_3_subgraph_shadow_model_citeseer_6966.pkl'))
+                    datasetCora_merge, 0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 '../../../pygip/models/attack_3_subgraph_shadow_model_citeseer_6966.pkl'))
                 )
                 attack.attack()
                 flag = True
             else:
                 attack = ModelExtractionAttack5(
-                    datasetCora_merge, 0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        '../../../pygip/models/attack_3_subgraph_shadow_model_citeseer_6966.pkl'))
+                    datasetCora_merge, 0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 '../../../pygip/models/attack_3_subgraph_shadow_model_citeseer_6966.pkl'))
                 )
                 attack.attack()
                 flag = True
@@ -496,19 +455,19 @@ class Defense:
             elif (attack_name == 2):
                 original_node_count = 19717
                 new_node_count = 50
-                output_file = os.path.abspath(os.path.join(defense_path, 
-                    "../../../pygip/data/attack2_generated_graph/pubmed/query_labels_pubmed.txt"))
+                output_file = os.path.abspath(os.path.join(defense_path,
+                                                           "../../../pygip/data/attack2_generated_graph/pubmed/query_labels_pubmed.txt"))
                 self.generate_extended_label_file(datasetCora_merge, original_node_count, new_node_count, output_file)
 
                 attack = ModelExtractionAttack1(
-                    datasetCora_merge, 
-                    0.25, 
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/pubmed/selected_index.txt")),
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/pubmed/query_labels_pubmed.txt")),
-                    os.path.abspath(os.path.join(defense_path, 
-                        "../../../pygip/data/attack2_generated_graph/pubmed/graph_label0_657_667.txt"))
+                    datasetCora_merge,
+                    0.25,
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/pubmed/selected_index.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/pubmed/query_labels_pubmed.txt")),
+                    os.path.abspath(os.path.join(defense_path,
+                                                 "../../../pygip/data/attack2_generated_graph/pubmed/graph_label0_657_667.txt"))
                 )
                 attack.attack()
                 flag = True
@@ -522,7 +481,7 @@ class Defense:
                 flag = True
             elif (attack_name == 5):
                 attack = ModelExtractionAttack4(
-                    datasetCora_merge, 0.25, 
+                    datasetCora_merge, 0.25,
                     '../../../pygip/models/attack_3_subgraph_shadow_model_pubmed_8063.pkl'
                 )
                 attack.attack()
@@ -530,7 +489,7 @@ class Defense:
             else:
                 flag = True
                 attack = ModelExtractionAttack5(
-                    datasetCora_merge, 0.25, 
+                    datasetCora_merge, 0.25,
                     '../../../pygip/models/attack_3_subgraph_shadow_model_pubmed_8063.pkl'
                 )
                 attack.attack()
@@ -541,18 +500,21 @@ class Defense:
             datasetCora_wm = graph_to_dataset(datawm, 0.25, dataset.dataset_name)
             datasetCora_wm.test_mask = torch.ones_like(datasetCora_wm.test_mask, dtype=torch.bool)
 
-            net = Gcn_Net(attack.feature_number, attack.label_number)
+            net = GCN(attack.feature_number, attack.label_number)
             evaluation = GraphNeuralNetworkMetric(
-                0, 0, net, datasetCora_wm.graph, datasetCora_wm.features, datasetCora_wm.test_mask, datasetCora_wm.labels
+                0, 0, net, datasetCora_wm.graph, datasetCora_wm.features, datasetCora_wm.test_mask,
+                datasetCora_wm.labels
             )
             evaluation.evaluate()
             print("Watermark Graph - Accuracy:", evaluation.accuracy)
-            
+
+
 class Watermark_sage(Defense):
     """
     Inherits from Defense. Uses GraphSAGE to train on both the original and 
     watermark graphs, ultimately embedding a watermark into the trained model (or graph).
     """
+
     def __init__(self, dataset, attack_node_fraction, wm_node=50, pr=0.1, pg=0, device=device):
         """
         Initializes Watermark_sage.
@@ -604,7 +566,7 @@ class Watermark_sage(Defense):
         """
         edges = []
         for i in range(n):
-            for j in range(i+1, n):
+            for j in range(i + 1, n):
                 if torch.rand(1).item() < p:
                     edges.append([i, j])
                     if not directed:
@@ -653,7 +615,8 @@ class Watermark_sage(Defense):
         sampler = NeighborSampler([5, 5])
         train_nids = self.graph.ndata['train_mask'].nonzero(as_tuple=True)[0].to(self.device)
         # If 'val_mask' doesn't exist, use 'test_mask' instead (for demonstration)
-        val_nids = self.graph.ndata.get('val_mask', self.graph.ndata['test_mask']).nonzero(as_tuple=True)[0].to(self.device)
+        val_nids = self.graph.ndata.get('val_mask', self.graph.ndata['test_mask']).nonzero(as_tuple=True)[0].to(
+            self.device)
         test_nids = self.graph.ndata['test_mask'].nonzero(as_tuple=True)[0].to(self.device)
         wm_nids = torch.arange(data_wm.number_of_nodes(), device=self.device)
 
