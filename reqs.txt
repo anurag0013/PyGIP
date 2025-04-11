@@ -34,7 +34,7 @@ scipy==1.14.0
 six==1.16.0
 sympy==1.13.1
 threadpoolctl==3.6.0
-torch==2.4.0
+torch==2.3.0
 torch-geometric==2.6.1
 torchdata==0.7.1
 tqdm==4.66.4

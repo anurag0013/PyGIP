@@ -1,16 +1,10 @@
 from .base import BaseDefense
-from .watermark import (
-    graph_to_dataset,  # Add this utility class
-    WatermarkGraph,
-    GraphSAGE,
-    Defense,
-    Watermark_sage
+from .WatermarkDefense import (
+    WatermarkByRandomGraph,
+    BaseDefense
 )
 
 __all__ = [
-    'graph_to_dataset',
-    'WatermarkGraph',
-    'GraphSAGE',
-    'Defense',
-    'Watermark_sage'
+    'BaseDefense',
+    'WatermarkByRandomGraph'
 ]

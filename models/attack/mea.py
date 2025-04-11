@@ -21,6 +21,49 @@ class ModelExtractionAttack(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
         super().__init__(dataset, attack_node_fraction, model_path)
 
+    def train_target_model(self):
+        """
+        Train the target model (GCN) on the original graph.
+        """
+        # Initialize GNN model
+        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
+        
+        # Training loop
+        for epoch in range(200):
+            self.net1.train()
+            
+            # Forward pass
+            logits = self.net1(self.graph, self.features)
+            logp = F.log_softmax(logits, dim=1)
+            loss = F.nll_loss(logp[self.train_mask], self.labels[self.train_mask])
+            
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            # Validation (optional)
+            if epoch % 20 == 0:
+                self.net1.eval()
+                with torch.no_grad():
+                    logits_val = self.net1(self.graph, self.features)
+                    logp_val = F.log_softmax(logits_val, dim=1)
+                    pred = logp_val.argmax(dim=1)
+                    acc_val = (pred[self.test_mask] == self.labels[self.test_mask]).float().mean()
+                    # You could print validation accuracy here
+                
+        return self.net1
+
+    def _load_model(self, model_path):
+        """
+        Load a pre-trained model from a file.
+        """
+        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1.load_state_dict(torch.load(model_path))
+        self.net1.eval()
+        return self.net1
+
     def attack(self):
         raise NotImplementedError
 

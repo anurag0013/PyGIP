@@ -9,7 +9,7 @@ from .models.attack.mea import (
     ModelExtractionAttack5
 )
 from .models.defense import BaseDefense
-from .models.defense.watermark import Watermark_sage
+from .models.defense.WatermarkDefense import WatermarkByRandomGraph
 from .models.nn import GCN, GraphSAGE, ShadowNet, AttackNet
 from .utils.metrics import GraphNeuralNetworkMetric
 
