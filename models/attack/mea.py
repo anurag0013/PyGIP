@@ -251,6 +251,8 @@ class ModelExtractionAttack0(ModelExtractionAttack):
             print("========================Final results:=========================================")
             print(best_performance_metrics)
 
+            self.net2 = net
+
         except RuntimeError as e:
             print(f"Runtime error: {e}")
             torch.cuda.empty_cache()

@@ -31,7 +31,7 @@ class WatermarkByRandomGraph(BaseDefense):
     - Dynamic selection of attack methods
     """
     
-    def __init__(self, dataset, attack_node_fraction=0.2, wm_node=10, pr=0.1, pg=0, attack_name=None):
+    def __init__(self, dataset, attack_node_fraction=0.2, wm_node=50, pr=0.2, pg=0.2, attack_name=None):
         """
         Initialize the custom defense.
         
@@ -538,31 +538,54 @@ class WatermarkByRandomGraph(BaseDefense):
             print("Warning: No watermark graph found. Generate one first.")
             return 0.0
         
-        # Setup data loading for watermark graph
-        sampler = NeighborSampler([5, 5])
-        wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=device)
-        wm_collator = NodeCollator(self.watermark_graph, wm_nids, sampler)
+        # Check the model type to determine the correct evaluation approach
+        model_name = attack_model.__class__.__name__
         
-        wm_dataloader = DataLoader(
-            wm_collator.dataset,
-            batch_size=self.wm_node,
-            shuffle=False,
-            collate_fn=wm_collator.collate,
-            drop_last=False
-        )
-        
-        # Evaluate attack model on watermark
-        attack_model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for _, _, blocks in wm_dataloader:
-                blocks = [b.to(device) for b in blocks]
-                input_features = blocks[0].srcdata['feat']
-                output_labels = blocks[-1].dstdata['label']
-                output_predictions = attack_model(blocks, input_features)
+        # For GCN models that expect (g, features) input format
+        if model_name == 'GCN':
+            # Evaluate using the whole graph at once
+            attack_model.eval()
+            with torch.no_grad():
+                # Pass the entire graph and features at once
+                output_predictions = attack_model(self.watermark_graph, self.watermark_graph.ndata['feat'])
                 pred = output_predictions.argmax(dim=1)
-                correct += (pred == output_labels).sum().item()
-                total += len(output_labels)
+                correct = (pred == self.watermark_graph.ndata['label']).sum().item()
+                total = self.watermark_graph.number_of_nodes()
+            
+            return correct / total
+            
+        # For GraphSAGE models that expect blocks input format
+        elif model_name == 'GraphSAGE':
+            # Setup data loading for watermark graph
+            sampler = NeighborSampler([5, 5])
+            wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=device)
+            wm_collator = NodeCollator(self.watermark_graph, wm_nids, sampler)
+            
+            wm_dataloader = DataLoader(
+                wm_collator.dataset,
+                batch_size=self.wm_node,
+                shuffle=False,
+                collate_fn=wm_collator.collate,
+                drop_last=False
+            )
+            
+            # Evaluate attack model on watermark
+            attack_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for _, _, blocks in wm_dataloader:
+                    blocks = [b.to(device) for b in blocks]
+                    input_features = blocks[0].srcdata['feat']
+                    output_labels = blocks[-1].dstdata['label']
+                    output_predictions = attack_model(blocks, input_features)
+                    pred = output_predictions.argmax(dim=1)
+                    correct += (pred == output_labels).sum().item()
+                    total += len(output_labels)
+            
+            return correct / total
         
-        return correct / total
+        # For any other model type, print a warning and return 0
+        else:
+            print(f"Warning: Unsupported model type '{model_name}' for watermark evaluation")
+            return 0.0
