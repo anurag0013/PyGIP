@@ -1,7 +1,8 @@
 import os
 import random
 import time
-
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import networkx as nx
 import numpy as np
 import torch
@@ -9,16 +10,31 @@ import torch.nn.functional as F
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from models.attack import BaseAttack
+from models.attack.base import BaseAttack
 from models.nn import GCN, ShadowNet, AttackNet
 from utils.metrics import GraphNeuralNetworkMetric
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cpu')
 
 class ModelExtractionAttack(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
+
+        # Move tensors to device before calling super().__init__
+        self.alpha = alpha
+        self.graph = dataset.graph.to(device)
+        self.features = dataset.features.to(device)
+        self.labels = dataset.labels.to(device)
+        self.train_mask = dataset.train_mask.to(device)
+        self.test_mask = dataset.test_mask.to(device)
+        
+        # Store original references
+        dataset.graph = self.graph
+        dataset.features = self.features
+        dataset.labels = self.labels
+        dataset.train_mask = self.train_mask
+        dataset.test_mask = self.test_mask
+
         super().__init__(dataset, attack_node_fraction, model_path)
 
     def train_target_model(self):
@@ -55,14 +71,14 @@ class ModelExtractionAttack(BaseAttack):
                 
         return self.net1
 
-    def _load_model(self, model_path):
-        """
-        Load a pre-trained model from a file.
-        """
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
-        self.net1.load_state_dict(torch.load(model_path))
-        self.net1.eval()
-        return self.net1
+    # def _load_model(self, model_path):
+    #     """
+    #     Load a pre-trained model from a file.
+    #     """
+    #     self.net1 = GCN(self.feature_number, self.label_number).to(device)
+    #     self.net1.load_state_dict(torch.load(model_path))
+    #     self.net1.eval()
+    #     return self.net1
 
     def attack(self):
         raise NotImplementedError

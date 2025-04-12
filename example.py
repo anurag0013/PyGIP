@@ -3,7 +3,7 @@ from models.defense import WatermarkByRandomGraph
 
 # Example 1: Basic usage with default attack (ModelExtractionAttack0)
 dataset = Cora()  # Load Cora dataset
-defense = WatermarkByRandomGraph(dataset, attack_node_fraction=0.25)
+defense = WatermarkByRandomGraph(dataset, attack_node_fraction=0.2)
 results = defense.defend(attack_name="ModelExtractionAttack0")
 
 # Example 2: Specifying attack at initialization
@@ -35,3 +35,7 @@ for i, result in enumerate([results], start=1):
         print(f"Target model attack success: {result['target_attack_results']['success_rate']:.4f}")
     if isinstance(result['defense_attack_results'], dict) and 'success_rate' in result['defense_attack_results']:
         print(f"Defense model attack success: {result['defense_attack_results']['success_rate']:.4f}")
+    if 'target_attack_watermark_accuracy' in result:
+        print(f"Target attack model on watermark: {result['target_attack_watermark_accuracy']:.4f}")
+    if 'defense_attack_watermark_accuracy' in result:
+        print(f"Defense attack model on watermark: {result['defense_attack_watermark_accuracy']:.4f}")
