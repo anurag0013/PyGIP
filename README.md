@@ -286,6 +286,9 @@ Use clear commit messages following the format:
 - Test your implementation in `example.py`, and compare the performance with the results in original paper.
 
 4. Push to Internal Branch
+- Always run `git pull origin pygip-release` before pushing your changes  
+- Submit a pull request targeting the `pygip-release` branch  
+- Write a brief summary describing the features you’ve added, how to run your method, and how to evaluate its performance
 
 Push to the remote feature branch.
 ```shell
