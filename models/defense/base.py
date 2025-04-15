@@ -25,6 +25,12 @@ class BaseDefense(ABC):
         """
         raise NotImplementedError
 
+    def _load_model(self):
+        """
+        Load pre-trained model.
+        """
+        raise NotImplementedError
+
     def _train_target_model(self):
         """
         This is an optional method.

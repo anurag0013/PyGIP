@@ -31,6 +31,12 @@ class BaseAttack(ABC):
         """
         raise NotImplementedError
 
+    def _load_model(self, model_path):
+        """
+        Load a pre-trained model.
+        """
+        raise NotImplementedError
+
     def _train_target_model(self):
         """
         Train the target model if not provided.
@@ -40,11 +46,5 @@ class BaseAttack(ABC):
     def _train_attack_model(self):
         """
         Train the attack model.
-        """
-        raise NotImplementedError
-
-    def _load_model(self, model_path):
-        """
-        Load a pre-trained model.
         """
         raise NotImplementedError

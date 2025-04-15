@@ -14,6 +14,12 @@ pip install -r reqs.txt
 Ensure you have Python installed (version 3.8 or higher recommended) along with the necessary libraries listed
 in `reqs.txt`.
 
+Specifically, using following command to install `dgl 2.2.1` and ensure your `pytorch==2.3.0`.
+
+```shell
+pip install dgl==2.2.1 -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+```
+
 ## Quick Start
 
 Here’s a simple example to launch a model extraction attack using PyGIP:
@@ -37,13 +43,13 @@ attack with a specified sampling ratio.
 Here’s an expanded and detailed version of the "Contribute to Code" section for your README.md, incorporating the
 specifics of `BaseAttack` and `Dataset` you provided. This version is thorough, clear, and tailored for contributors:
 
-## Contribute to Code
+## Implementation
 
 PyGIP is built to be modular and extensible, allowing contributors to implement their own attack and defense strategies.
 Below, we detail how to extend the framework by implementing custom attack and defense classes, with a focus on how to
 leverage the provided dataset structure.
 
-### Implementing an Attack
+### Implementing Attack
 
 To create a custom attack, you need to extend the abstract base class `BaseAttack`. Here’s the structure
 of `BaseAttack`:
@@ -60,86 +66,121 @@ class BaseAttack(ABC):
         self.graph = dataset.graph  # Access the DGL-based graph directly
         # Additional initialization can go here
 
+    @abstractmethod
     def attack(self):
-        """Abstract method to implement attack logic."""
-        pass
+        raise NotImplementedError
+
+    def _train_target_model(self):
+        raise NotImplementedError
+
+    def _train_attack_model(self):
+        raise NotImplementedError
+
+    def _load_model(self, model_path):
+        raise NotImplementedError
 ```
 
 To implement your own attack:
 
 1. **Inherit from `BaseAttack`**:
-   Create a new class that inherits from `BaseAttack`. You’ll need to provide the required parameters in the
+   Create a new class that inherits from `BaseAttack`. You’ll need to provide the following required parameters in the
    constructor:
-    - `dataset`: An instance of the `Dataset` class (see below for details).
-    - `attack_node_fraction`: A float between 0 and 1 representing the fraction of nodes to attack.
-    - `model_path` (optional): A string specifying the path to a pre-trained model (defaults to `None`).
+
+- `dataset`: An instance of the `Dataset` class (see below for details).
+- `attack_node_fraction`: A float between 0 and 1 representing the fraction of nodes to attack.
+- `model_path` (optional): A string specifying the path to a pre-trained model (defaults to `None`).
+
+You need to implement following methods:
+
+- `attack()`: Add main attack logic here.
+- `_load_model()`: Load victim model.
+- `_train_target_model()`: Train victim model.
+- `_train_attack_model()`: Train attack model.
+- `_helper_func()`(optional): Add your helper functions based on your needs, but keep the methods private.
 
 2. **Implement the `attack()` Method**:
-   Override the abstract `attack()` method with your attack logic. For example:
-
-   ```python
-   class MyCustomAttack(BaseAttack):
-       def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
-           super().__init__(dataset, attack_node_fraction, model_path)
-           # Additional initialization if needed
-
-       def attack(self):
-           # Example: Access the graph and perform an attack
-           print(f"Attacking {self.attack_node_fraction * 100}% of nodes")
-           num_nodes = self.graph.num_nodes()
-           print(f"Graph has {num_nodes} nodes")
-           # Add your attack logic here
-   ```
-
-3. **Accessing the Dataset**:
-    - The `dataset` passed to `BaseAttack` is an instance of the `Dataset` class (see below).
-    - Use `self.graph` to directly access the DGL-based graph data. This is pre-populated by the `Dataset` class and
-      provides a unified interface to the graph structure.
-    - You can also access other dataset attributes
-      like `self.dataset.features`, `self.dataset.labels`, `self.dataset.train_mask`, etc., if needed.
-
-4. **Adding Helper Functions**:
-   Feel free to add helper methods within your class to modularize your attack logic. For example:
-
-   ```python
-   class MyCustomAttack(BaseAttack):
-       def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
-           super().__init__(dataset, attack_node_fraction, model_path)
-
-       def _select_nodes(self):
-           # Helper function to select nodes for attack
-           num_nodes = self.graph.num_nodes()
-           attack_size = int(num_nodes * self.attack_node_fraction)
-           return range(attack_size)  # Example selection
-
-       def attack(self):
-           target_nodes = self._select_nodes()
-           print(f"Attacking {len(target_nodes)} nodes")
-           # Attack logic here
-   ```
-
-### Implementing a Defense
-
-To create a custom defense, extend the `BaseDefense` class:
+   Override the abstract `attack()` method with your attack logic, and return a dict of results. For example:
 
 ```python
-from models.defense import BaseDefense
+class MyCustomAttack(BaseAttack):
+    def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
+        super().__init__(dataset, attack_node_fraction, model_path)
+        # Additional initialization if needed
 
+    def attack(self):
+        # Example: Access the graph and perform an attack
+        print(f"Attacking {self.attack_node_fraction * 100}% of nodes")
+        num_nodes = self.graph.num_nodes()
+        print(f"Graph has {num_nodes} nodes")
+        # Add your attack logic here
+        return {
+            'metric1': 'metric1 here',
+            'metric2': 'metric2 here'
+        }
 
-class MyCustomDefense(BaseDefense):
-    def defend(self):
-        # Add your defense logic here
+    def _load_model(self):
+        # add your logic here
+        pass
+
+    def _train_target_model(self):
+        # add your logic here
+        pass
+
+    def _train_attack_model(self):
+        # add your logic here
         pass
 ```
 
-A typical defense workflow might look like this:
+### Implementing Defense
 
-1. Train a target model using the dataset.
-2. Perform an attack on the target model (e.g., using an attack class) and evaluate its performance.
-3. Train a defense model to mitigate the attack.
-4. Test the defense model against the same attack and report the performance.
+To create a custom defense, you need to extend the abstract base class `BaseDefense`. Here’s the structure
+of `BaseDefense`:
 
-Example:
+```python
+class BaseDefense(ABC):
+    def __init__(self, dataset: Dataset, attack_node_fraction: float):
+        """Base class for all defense implementations."""
+        # add initialization here
+
+    @abstractmethod
+    def defend(self):
+        raise NotImplementedError
+
+    def _load_model(self):
+        raise NotImplementedError
+
+    def _train_target_model(self):
+        raise NotImplementedError
+
+    def _train_defense_model(self):
+        raise NotImplementedError
+
+    def _train_surrogate_model(self):
+        raise NotImplementedError
+```
+
+To implement your own attack:
+
+1. **Inherit from `BaseAttack`**:
+   Create a new class that inherits from `BaseAttack`. You’ll need to provide the following required parameters in the
+   constructor:
+
+- `dataset`: An instance of the `Dataset` class (see below for details).
+- `attack_node_fraction`: A float between 0 and 1 representing the fraction of nodes to attack.
+- `model_path` (optional): A string specifying the path to a pre-trained model (defaults to `None`).
+
+You need to implement following methods:
+
+- `defense()`: Add main defense logic here.
+- `_load_model()`: Load victim model.
+- `_train_target_model()`: Train victim model.
+- `_train_defense_model()`: Train defense model.
+- `_train_surrogate_model()`: Train attack model.
+- `_helper_func()`(optional): Add your helper functions based on your needs, but keep the methods private.
+
+
+2. **Implement the `defense()` Method**:
+   Override the abstract `defense()` method with your attack logic, and return a dict of results. For example:
 
 ```python
 class MyCustomDefense(BaseDefense):
@@ -156,12 +197,20 @@ class MyCustomDefense(BaseDefense):
         attack.attack(defense_model)
         # Print performance metrics
 
+    def _load_model(self):
+        # add your logic here
+        pass
+
     def _train_target_model(self):
-        # Helper function for training target model
+        # add your logic here
         pass
 
     def _train_defense_model(self):
-        # Helper function for training defense model
+        # add your logic here
+        pass
+
+    def _train_surrogate_model(self):
+        # add your logic here
         pass
 ```
 
@@ -198,12 +247,6 @@ class Dataset(object):
 - Additional attributes like `self.dataset.features` (node features), `self.dataset.labels` (node labels),
   and `self.dataset.train_mask` (training split) are also available if your logic requires them.
 
-### Submit Guideline
-
-please submit pull request
-todo...
-
-
 ### Miscellaneous Tips
 
 - **Reference Implementation**: The `ModelExtractionAttack0` class is a fully implemented attack example. Study it for
@@ -216,6 +259,46 @@ todo...
 
 By following these guidelines, you can seamlessly integrate your custom attack or defense strategies into PyGIP. Happy
 coding!
+
+## Internal Code Submission Guideline
+
+For internal team members with write access to the repository:
+
+1. Always Use Feature/Fix Branches
+
+- Never commit directly to the main or develop branch.
+- Create a new branch for each feature, bug fix.
+
+```shell
+git checkout -b feature/your-feature-name
+```
+
+```shell
+git checkout -b fix/your-fix-name
+```
+
+2. Keep Commits Clean & Meaningful
+- feat: add data loader for graph dataset 
+- fix: resolve crash on edge cases
+
+Use clear commit messages following the format:
+```shell
+<type>: <summary>
+```
+
+3. Test Before Pushing
+- Test your implementation in `example.py`, and compare the performance with the results in original paper.
+
+4. Push to Internal Branch
+
+Push to the remote feature branch.
+```shell
+git push origin feature/your-feature-name
+```
+
+## External Pull Request Guideline
+
+Refer to [guidline](.github/CONTRIBUTING.md)
 
 ## License
 
