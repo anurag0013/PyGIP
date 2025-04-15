@@ -155,7 +155,7 @@ class BaseDefense(ABC):
         raise NotImplementedError
 ```
 
-To implement your own attack:
+To implement your own defense:
 
 1. **Inherit from `BaseDefense`**:
    Create a new class that inherits from `BaseDefense`. You’ll need to provide the following required parameters in the
@@ -176,7 +176,7 @@ You need to implement following methods:
 
 
 2. **Implement the `defense()` Method**:
-   Override the abstract `defense()` method with your attack logic, and return a dict of results. For example:
+   Override the abstract `defense()` method with your defense logic, and return a dict of results. For example:
 
 ```python
 class MyCustomDefense(BaseDefense):
