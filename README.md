@@ -55,10 +55,6 @@ To create a custom attack, you need to extend the abstract base class `BaseAttac
 of `BaseAttack`:
 
 ```python
-from abc import ABC
-from datasets import Dataset
-
-
 class BaseAttack(ABC):
     def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
         """Base class for all attack implementations."""
@@ -161,8 +157,8 @@ class BaseDefense(ABC):
 
 To implement your own attack:
 
-1. **Inherit from `BaseAttack`**:
-   Create a new class that inherits from `BaseAttack`. You’ll need to provide the following required parameters in the
+1. **Inherit from `BaseDefense`**:
+   Create a new class that inherits from `BaseDefense`. You’ll need to provide the following required parameters in the
    constructor:
 
 - `dataset`: An instance of the `Dataset` class (see below for details).
@@ -270,7 +266,7 @@ For internal team members with write access to the repository:
 - Create a new branch for each feature, bug fix.
 
 ```shell
-git checkout -b feature/your-feature-name
+git checkout -b feat/your-feature-name
 ```
 
 ```shell
@@ -293,7 +289,7 @@ Use clear commit messages following the format:
 
 Push to the remote feature branch.
 ```shell
-git push origin feature/your-feature-name
+git push origin feat/your-feature-name
 ```
 
 ## External Pull Request Guideline
