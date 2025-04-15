@@ -1,60 +1,70 @@
-## External Pull Request Guideline
+# 🧩 Contributing to This Project
 
-External contributors are welcome! Please follow the steps below to submit a clean and reviewable pull request:
+Thank you for your interest in contributing! We welcome all contributions — bug reports, feature requests, pull
+requests, and documentation improvements.
 
-### 🔧 Step 1: Fork the Repository
+Please follow the guidelines below to ensure a smooth contribution process.
 
-- Navigate to the repository page.
-- Click on the **Fork** button in the upper-right corner to create your own copy.
+---
 
-### 💻 Step 2: Clone Your Fork
+## 🐛 Reporting Bugs
 
-```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
-```
+1. Check if the bug has already been reported.
+2. Open a new [bug report](https://github.com/your-org/your-repo/issues/new?template=bug_report.md).
+3. Include:
+    - Clear reproduction steps
+    - Expected vs. actual behavior
+    - Logs, screenshots, or minimal code snippets if possible
 
-### 🌱 Step 3: Create a Feature Branch
+---
 
-```bash
-git checkout -b feature/your-feature-name
-```
+## 🚀 Suggesting Features
 
-🔒 Do not make changes directly on your main branch.
+1. Check if a similar feature request already exists.
+2. Open a new [feature request](https://github.com/your-org/your-repo/issues/new?template=feature_request.md).
+3. Include:
+    - Motivation and use case
+    - Desired functionality
+    - Alternatives you considered
 
-### 🛠 Step 4: Make Your Changes
+---
 
-- Follow the project’s code style and structure.
-- Add comments and documentation where appropriate.
-- Write or update tests to cover your changes.
+## 🔧 Submitting Pull Requests
 
-### ✅ Step 5: Run Tests
+> All code changes should be proposed via Pull Request (PR) from a feature branch — **do not commit directly to `main`
+**.
 
-Provide examples about how to run, and test performance.
+### Steps:
 
-### 📤 Step 6: Commit and Push
-
+1. Fork the repository
+2. Create a new branch:
 ```shell
-git add .
-git commit -m "feat: concise summary of your change"
-git push origin feature/your-feature-name
+git checkout -b feat/your-feature-name
 ```
+3. Commit your changes:
+```shell
+git push origin feat/your-feature-name
+```
+4. Push to your fork:
+```shell
+git push origin feat/your-feature-name
+```
+5. Open a PR against the `main` branch
 
-### Step 7: Open a Pull Request
+---
 
-- Go to your fork on GitHub.
-- Click “Compare & pull request”
-- Complete the PR template:
-    - What the PR does
-    - Why it’s needed
-    - How to test
-- Link any related issue (e.g., Closes #42)
+## 📄 Code Style & Testing
+- Follow existing code conventions
+- Use meaningful names and comments
+- Add tests for new features or bug fixes
+- Run all tests before submitting a PR
 
-🎯 Make sure your PR targets the correct base branch.
+---
 
-### 🔁 Step 8: Respond to Review Feedback
+## 💬 Questions or Help?
+- Use Discussions for general questions
+- Feel free to open an issue if something is unclear
 
-- Push follow-up commits to the same branch.
-- Mark conversations as resolved.
-- Actively engage with reviewers.
+---
 
+Thank you for contributing! 🙌
