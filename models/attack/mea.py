@@ -37,7 +37,7 @@ class ModelExtractionAttack(BaseAttack):
 
         super().__init__(dataset, attack_node_fraction, model_path)
 
-    def train_target_model(self):
+    def _train_target_model(self):
         """
         Train the target model (GCN) on the original graph.
         """
@@ -71,14 +71,14 @@ class ModelExtractionAttack(BaseAttack):
                 
         return self.net1
 
-    # def _load_model(self, model_path):
-    #     """
-    #     Load a pre-trained model from a file.
-    #     """
-    #     self.net1 = GCN(self.feature_number, self.label_number).to(device)
-    #     self.net1.load_state_dict(torch.load(model_path))
-    #     self.net1.eval()
-    #     return self.net1
+    def _load_model(self, model_path):
+        """
+        Load a pre-trained model from a file.
+        """
+        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1.load_state_dict(torch.load(model_path))
+        self.net1.eval()
+        return self.net1
 
     def attack(self):
         raise NotImplementedError

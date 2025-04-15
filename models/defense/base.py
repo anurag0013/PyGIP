@@ -31,7 +31,7 @@ class BaseDefense(ABC):
         """
         raise NotImplementedError
 
-    def _train_watermark_model(self):
+    def _train_defense_model(self):
         """
         This is an optional method.
         """

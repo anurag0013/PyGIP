@@ -198,6 +198,12 @@ class Dataset(object):
 - Additional attributes like `self.dataset.features` (node features), `self.dataset.labels` (node labels),
   and `self.dataset.train_mask` (training split) are also available if your logic requires them.
 
+### Submit Guideline
+
+please submit pull request
+todo...
+
+
 ### Miscellaneous Tips
 
 - **Reference Implementation**: The `ModelExtractionAttack0` class is a fully implemented attack example. Study it for

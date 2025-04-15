@@ -31,9 +31,15 @@ class BaseAttack(ABC):
         """
         raise NotImplementedError
 
-    def train_target_model(self):
+    def _train_target_model(self):
         """
         Train the target model if not provided.
+        """
+        raise NotImplementedError
+
+    def _train_attack_model(self):
+        """
+        Train the attack model.
         """
         raise NotImplementedError
 
