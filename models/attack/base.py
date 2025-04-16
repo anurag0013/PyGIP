@@ -20,7 +20,7 @@ class BaseAttack(ABC):
         self.test_mask = dataset.test_mask
 
         if model_path is None:
-            self.train_target_model()
+            self._train_target_model()
         else:
             self._load_model(model_path)
 
