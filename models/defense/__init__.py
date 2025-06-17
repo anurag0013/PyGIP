@@ -4,7 +4,12 @@ from .WatermarkDefense import (
     BaseDefense
 )
 
+from .BackdoorWM import BackdoorWM
+from .SurviveWM import SurviveWM
+
 __all__ = [
     'BaseDefense',
-    'WatermarkByRandomGraph'
+    'WatermarkByRandomGraph',
+    'BackdoorWM',
+    'SurviveWM',
 ]
