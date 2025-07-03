@@ -88,7 +88,11 @@ To implement your own attack:
 
 You need to implement following methods:
 
-- `attack()`: Add main attack logic here.
+- `attack()`: Add main attack logic here. If multiple attack types are supported, define the attack type as an optional
+  argument to this function.  
+  For each specific attack type, implement a corresponding helper function such as `_attack_type1()`
+  or `_attack_type2()`,  
+  and call the appropriate helper inside `attack()` based on the given method name.
 - `_load_model()`: Load victim model.
 - `_train_target_model()`: Train victim model.
 - `_train_attack_model()`: Train attack model.
@@ -167,7 +171,11 @@ To implement your own defense:
 
 You need to implement following methods:
 
-- `defense()`: Add main defense logic here.
+- `defense()`: Add main defense logic here. If multiple defense types are supported, define the defense type as an
+  optional argument to this function.  
+  For each specific defense type, implement a corresponding helper function such as `_defense_type1()`
+  or `_defense_type2()`,  
+  and call the appropriate helper inside `defense()` based on the given method name.
 - `_load_model()`: Load victim model.
 - `_train_target_model()`: Train victim model.
 - `_train_defense_model()`: Train defense model.
@@ -216,8 +224,8 @@ The `Dataset` class standardizes the data format across PyGIP. Here’s its stru
 
 ```python
 class Dataset(object):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        self.api_type = api_type  # Set to 'dgl' for DGL-based graphs
+    def __init__(self, api_type='pyg', path='./downloads/'):
+        self.api_type = api_type  # Set to 'pyg' for torch_geometric-based graphs
         self.path = path  # Directory for dataset storage
         self.dataset_name = ""  # Name of the dataset (e.g., "Cora")
 
@@ -227,7 +235,7 @@ class Dataset(object):
         self.label_number = 0  # Number of label classes
 
         # Core data
-        self.graph = None  # DGL graph object
+        self.graph = None  # PyG graph object
         self.features = None  # Node features
         self.labels = None  # Node labels
 
@@ -237,9 +245,9 @@ class Dataset(object):
         self.test_mask = None  # Boolean mask for test nodes
 ```
 
-- **Key Insight for Contributors**: You don’t need to worry about loading or formatting the dataset manually. Simply
-  use `self.graph` in your attack or defense class to access the DGL-based graph object. This ensures consistency across
-  implementations.
+- **Importance**: We are currently using the default api_type='pyg' to load the data. It is important to note that when
+  api_type='pyg', `self.graph` should be an instance of `torch_geometric.data.Data`. In your implementation, make sure to
+  use our defined Dataset class to build your code.
 - Additional attributes like `self.dataset.features` (node features), `self.dataset.labels` (node labels),
   and `self.dataset.train_mask` (training split) are also available if your logic requires them.
 
@@ -248,8 +256,6 @@ class Dataset(object):
 - **Reference Implementation**: The `ModelExtractionAttack0` class is a fully implemented attack example. Study it for
   inspiration or as a template.
 - **Flexibility**: Add as many helper functions as needed within your class to keep your code clean and modular.
-- **Dataset Access**: Always use `self.graph` for graph operations to maintain compatibility with the framework’s
-  DGL-based structure.
 - **Backbone Models**: We provide several basic backbone models like `GCN, GraphSAGE`. You can use or add more
   at `from models.nn import GraphSAGE`.
 
@@ -274,23 +280,29 @@ git checkout -b fix/your-fix-name
 ```
 
 2. Keep Commits Clean & Meaningful
-- feat: add data loader for graph dataset 
+
+- feat: add data loader for graph dataset
 - fix: resolve crash on edge cases
 
 Use clear commit messages following the format:
+
 ```shell
 <type>: <summary>
 ```
 
 3. Test Before Pushing
+
 - Test your implementation in `example.py`, and compare the performance with the results in original paper.
 
 4. Push to Internal Branch
-- Always run `git pull origin pygip-release` before pushing your changes  
-- Submit a pull request targeting the `pygip-release` branch  
-- Write a brief summary describing the features you’ve added, how to run your method, and how to evaluate its performance
+
+- Always run `git pull origin pygip-release` before pushing your changes
+- Submit a pull request targeting the `pygip-release` branch
+- Write a brief summary describing the features you’ve added, how to run your method, and how to evaluate its
+  performance
 
 Push to the remote feature branch.
+
 ```shell
 git push origin feat/your-feature-name
 ```
