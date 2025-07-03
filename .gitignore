@@ -33,3 +33,6 @@ Icon
 
 # macOS network shares
 .AppleSharePDS
+
+#virtual environments folder
+.venv

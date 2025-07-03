@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dgl.nn.pytorch import GraphConv, SAGEConv
+from torch_geometric.nn import GATConv
+from torch_geometric.nn import GCNConv
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -101,3 +104,25 @@ class AttackNet(nn.Module):
         x = F.relu(self.layers[0](g, features))
         x = self.layers[1](g, x)
         return x
+
+
+
+class GAT(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, heads=8):
+        super().__init__()
+        self.conv1 = GATConv(in_channels, hidden_channels, heads=heads)
+        self.conv2 = GATConv(hidden_channels*heads, out_channels, heads=1)
+    def forward(self, x, edge_index):
+        x = F.relu(self.conv1(x, edge_index))
+        return self.conv2(x, edge_index)
+
+
+class GCN_PyG(nn.Module):  # Rename to avoid clash with existing DGL GCN
+    def __init__(self, in_channels, hidden_channels, out_channels):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channels)
+
+    def forward(self, x, edge_index):
+        x = F.relu(self.conv1(x, edge_index))
+        return self.conv2(x, edge_index)
