@@ -1,8 +1,6 @@
 from datasets import Cora
-from models.attack import ModelExtractionAttack0
-
-from models.defense import BackdoorWM, SurviveWM
+from models.attack.cega import CEGA
 
 dataset = Cora()
-mea = BackdoorWM(dataset, 0.25)
-mea.defend()
+cega = CEGA(dataset, attack_node_fraction=0.25)
+cega.attack()
