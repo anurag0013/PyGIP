@@ -1,7 +1,6 @@
 import ast
 import os
 import random
-import uuid
 from pathlib import Path
 
 import networkx as nx
@@ -29,6 +28,7 @@ from torch_geometric.seed import seed_everything
 from torch_geometric.utils import to_networkx
 from tqdm import tqdm
 
+from datasets.datasets import Dataset as PyGIPDataset
 from models.defense.base import BaseDefense
 
 
@@ -43,271 +43,6 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
     seed_everything(seed)
-
-
-# ppo_config = {
-#     "CiteSeer": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 1,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_CiteSeer_new.csv",
-#         "saved_name": "CiteSeer",
-#         "data_path": "CiteSeer",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cora": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_Cora.csv",
-#         "saved_name": "Cora",
-#         "data_path": "Cora",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "PubMed": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_PubMed.csv",
-#         "saved_name": "PubMed",
-#         "data_path": "PubMed",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cora_ML": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Cora_ML.csv",
-#         "saved_name": "Cora_ML",
-#         "data_path": "Cora_ML",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cornell": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Corenell.csv",
-#         "saved_name": "Cornell",
-#         "data_path": "Cornell",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Wisconsin": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Wisconsin.csv",
-#         "saved_name": "Wisconsin",
-#         "data_path": "Wisconsin",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-# }
-#
-# ppo_config2 = {
-#     "CiteSeer": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 1,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_CiteSeer_new.csv",
-#         "saved_name": "CiteSeer",
-#         "data_path": "CiteSeer",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cora": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_Cora.csv",
-#         "saved_name": "Cora",
-#         "data_path": "Cora",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "PubMed": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/attack_PubMed.csv",
-#         "saved_name": "PubMed",
-#         "data_path": "PubMed",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cora_ML": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Cora_ML.csv",
-#         "saved_name": "Cora_ML",
-#         "data_path": "Cora_ML",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Cornell": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Corenell.csv",
-#         "saved_name": "Cornell",
-#         "data_path": "Cornell",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#     "Wisconsin": {
-#         'tp': 'ppo',
-#         "seed": [40, 43, 37719, 1005, 2005, 913],
-#         "lr": tune.choice([5e-5, 1e-5, 5e-4, 1e-4, 5e-3, 1e-3]),
-#         "batch_size": 16,
-#         "hidden_size": tune.choice([64, 128, 196, 256, 512]),
-#         "hidden_action_dim": tune.choice([8, 16, 32, 24, 64, 48]),
-#         "clip_epsilon": tune.choice([0.1, 0.2, 0.3, 0.4]),
-#         "entropy_coef": tune.choice([0.01, 0.02, 0.03, 0.1]),
-#         "num_epochs": 100,
-#         "K_epochs": 6,
-#         "gamma": 0.99,
-#         "csv_path": "./csv_data/new_attack_Wisconsin.csv",
-#         "saved_name": "Wisconsin",
-#         "data_path": "Wisconsin",
-#         "lam": tune.choice([0.95, 0.85]),
-#         "lamb": tune.choice([0, 0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10]),
-#     },
-#
-# }
-
-
-def train_ppo_tune(config, checkpoint_dir=None):
-    try:
-        script_dir = Path(__file__).resolve()
-        parent_dir = script_dir.parent
-    except NameError:
-        parent_dir = Path.cwd().parent
-    os.chdir(parent_dir)
-
-    unique_id = str(uuid.uuid4())
-    tp = config.get('tp', 'ppo')
-    save_dir = os.path.join(f"./Data_logs/{tp}/{config['saved_name']}", unique_id)
-    print(save_dir)
-    config["save_dir"] = save_dir
-    os.makedirs(save_dir, exist_ok=True)
-
-    if tp == 'ppo':
-        test_stats = train_ppo_main(config)
-
-    report_metrics = {
-        "test_AUC": test_stats.get("auc", 0),
-        "test_accuracy": test_stats.get("accuracy", 0),
-        "test_precision": test_stats.get("precision", 0),
-        "test_recall": test_stats.get("recall", 0),
-        "test_f1": test_stats.get("f1_score", 0),
-    }
-
-    print(report_metrics)
-
-    log_data = {
-        "trial_id": unique_id,
-        "config": config,
-        "test_stats": test_stats
-    }
-    rate = config.get("rate", 0.25)
-
-    with open(f"./Data_logs_{rate}/{config['saved_name']}_ray_tune_search_results.log", "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_data) + "\n")
-
-    report(report_metrics)
 
 
 class GCN(nn.Module):
@@ -373,18 +108,6 @@ def average_pooling_with_neighbors(model, data, node_idx):
     neighbor_embeddings = embeddings[neighbors]
     pooled_embedding = torch.mean(neighbor_embeddings, dim=0)
     return pooled_embedding
-
-
-# def compute_embedding(model, data, node_idx, lamb=1.0):
-#     pooled_embedding = average_pooling_with_neighbors(model, data, node_idx)
-#     k_core_value = torch.tensor(k_core_values_graph[node_idx], dtype=torch.float32)
-#
-#     scaled_k_core = torch.log(k_core_value) / torch.log(max_k_core)
-#     scaling_function = 1 + lamb * (torch.sigmoid(scaled_k_core) - 0.5) * 2
-#
-#     final_embedding = pooled_embedding * scaling_function
-#
-#     return final_embedding
 
 
 def k_core_decomposition(graph):
@@ -945,185 +668,18 @@ def custom_reward_function(predicted, label, predicted_distribution=None):
     return reward
 
 
-def train_ppo_main(config):
-    accuracy_list = []
-    precision_list = []
-    recall_list = []
-    f1_list = []
-    auc_value_list = []
-
-    seed = config.get("seed", 37719)
-    K_epochs = config.get("K_epochs", 10)
-    batch_size = config.get("batch_size", 16)
-    hidden_size = config.get("hidden_size", 196)
-    hidden_action_dim = config.get("hidden_action_dim", 16)
-    clip_epsilon = config.get("clip_epsilon", 0.30)
-    entropy_coef = config.get("entropy_coef", 0.05)
-    lr = config.get("lr", 1e-3)
-    gamma = config.get("gamma", 0.99)
-    lam = config.get("lam", 0.95)
-    num_epochs = config.get("num_epochs", 2)
-    save_dir = config.get('save_dir', None)
-    csv_path = config.get("csv_path", None)
-    data_path = config.get("data_path", "CiteSeer")
-    lamb = config.get("lamb", 0)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    action_dim = 2
-
-    # for seed_now in seed:
-    seed_now = seed
-    set_seed(seed_now)
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))  # TODO load hard code data
-    csv_path = os.path.join(current_dir, "attack_Cora.csv")
-    train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, dataset, data = load_data_and_model(
-        # TODO change load data from API
-        csv_path=csv_path,
-        batch_size=batch_size,
-        seed=seed_now,
-        data_path=data_path,
-        lamb=lamb
-    )
-
-    input_size = dataset.num_classes
-    embedding_dim = input_size
-    gru = FusionGRU(input_size=input_size, hidden_size=hidden_size).to(device)
-    mlp_transform = StateTransformMLP(action_dim, hidden_action_dim, hidden_size).to(device)
-    agent = PPOAgent(
-        learning_rate=lr,
-        batch_size=batch_size,
-        K_epochs=K_epochs,
-        state_dim=hidden_size,
-        action_dim=action_dim,
-        gru=gru,
-        mlp=mlp_transform,
-        clip_epsilon=clip_epsilon,
-        entropy_coef=entropy_coef,
-        device=device
-    ).to(device)
-
-    memory = Memory()
-    best_val_reward = float('-inf')
-
-    for epoch in tqdm(range(num_epochs), desc="Training Epochs", ncols=100):
-        episode_reward = 0.0
-        for batch_idx, (batch_seqs, batch_labels) in enumerate(train_loader):
-            batch_labels = batch_labels.to(device)
-
-            batch_seqs = [torch.tensor(seq, dtype=torch.long, device=device) for seq in batch_seqs]
-            padded_seqs = pad_sequence(batch_seqs, batch_first=True, padding_value=0)
-            mask = (padded_seqs != 0).float().to(device)
-            max_seq_len = padded_seqs.size(1)
-            all_inputs = []
-            for t in range(max_seq_len):
-                node_indices = padded_seqs[:, t].tolist()
-                cur_inputs = all_embeddings[node_indices]
-                all_inputs.append(cur_inputs)
-            all_inputs = torch.stack(all_inputs, dim=1).to(device)
-            hidden_states = gru.process_sequence(all_inputs)
-            masked_hidden_states = hidden_states * mask.unsqueeze(-1)
-            prob_factors = torch.ones(len(batch_seqs), max_seq_len, action_dim, device=device)
-            if memory.all_probs:
-                prob_factors[:, :-1] = torch.stack([
-                    torch.tensor(memory.all_probs.get(t, [1.0] * action_dim))
-                    for t in range(max_seq_len - 1)
-                ], dim=1).to(device)
-            custom_states = (mlp_transform(prob_factors) * masked_hidden_states).detach()
-            actions, log_probs, entropies, probs = agent.select_action(
-                custom_states.view(-1, hidden_size)
-            )
-            actions = actions.view(len(batch_seqs), max_seq_len)
-            log_probs = log_probs.view(len(batch_seqs), max_seq_len)
-            entropies = entropies.view(len(batch_seqs), max_seq_len)
-            probs = probs.view(len(batch_seqs), max_seq_len, action_dim)
-            rewards = torch.zeros(len(batch_seqs), max_seq_len, device=device)
-            dones = torch.zeros(len(batch_seqs), max_seq_len, device=device)
-            batch_predictions = actions.cpu().numpy()
-            predicted_distribution = (batch_predictions == 1).mean()
-            last_valid_steps = mask.sum(dim=1).long() - 1
-            for i in range(len(batch_seqs)):
-                for t in range(last_valid_steps[i] + 1):
-                    if mask[i, t] == 1:
-                        r = custom_reward_function(
-                            actions[i, t].item(),
-                            batch_labels[i].item(),
-                            predicted_distribution
-                        )
-                        rewards[i, t] = r
-                        episode_reward += r
-                dones[i, last_valid_steps[i]] = 1.0
-            memory.store(custom_states, actions, log_probs, rewards, dones,
-                         entropy=entropies, masks=mask)
-            compute_returns_and_advantages(memory, gamma=gamma, lam=lam)
-            agent.update(memory)
-            memory.clear()
-
-        agent.eval()
-        gru.eval()
-        mlp_transform.eval()
-        with torch.no_grad():
-            accuracy, precision, recall, f1, auc_value = test_model(agent, gru, mlp_transform, test_loader,
-                                                                    target_model, data, all_embeddings, hidden_size,
-                                                                    device)
-            accuracy_list.append(accuracy)
-            precision_list.append(precision)
-            recall_list.append(recall)
-            f1_list.append(f1)
-            auc_value_list.append(auc_value)
-
-    return {
-        "accuracy": np.mean(accuracy_list),
-        "precision": np.mean(precision_list),
-        "recall": np.mean(recall_list),
-        "f1_score": np.mean(f1_list),
-        "auc": np.mean(auc_value_list),
-        "accuracy_std": np.std(accuracy_list),
-        "precision_std": np.std(precision_list),
-        "recall_std": np.std(recall_list),
-        "f1_score_std": np.std(f1_list),
-        "auc_std": np.std(auc_value_list)
-    }
-
-
-def run():
-    test_stats = train_ppo_main({})
-
-    report_metrics = {
-        "test_AUC": test_stats.get("auc", 0),
-        "test_accuracy": test_stats.get("accuracy", 0),
-        "test_precision": test_stats.get("precision", 0),
-        "test_recall": test_stats.get("recall", 0),
-        "test_f1": test_stats.get("f1_score", 0),
-    }
-
-    print(report_metrics)
-
-
 class ATOM(BaseDefense):
-    def __init__(self, dataset: Dataset, attack_node_fraction: float):  # TODO change Dataset API
+    def __init__(self, dataset: PyGIPDataset, attack_node_fraction: float = 0):
         """Base class for all defense implementations."""
+        super().__init__(dataset, attack_node_fraction)
+        assert dataset.api_type == 'torch_geometric'
+        support_dataset = {'Cora', 'Citeseer', 'PubMed'}
+        assert dataset.__class__.__name__ in support_dataset
         self.dataset = dataset
-        # self.graph = dataset.graph
-        # self.node_number = dataset.node_number
-        # self.feature_number = dataset.feature_number
-        # self.label_number = dataset.label_number
-        # self.attack_node_number = int(dataset.node_number * attack_node_fraction)
-        #
-        # self.features = dataset.features
-        # self.labels = dataset.labels
-        # self.train_mask = dataset.train_mask
-        # self.test_mask = dataset.test_mask
 
-    def _load_data_and_model(self, data_path='Cora', csv_path='defense/attack_Cora.csv', batch_size=16, seed=0, lamb=0):
-        try:
-            script_dir = Path(__file__).resolve().parent
-            parent_dir = script_dir.parent
-        except NameError:
-            parent_dir = Path.cwd().parent
-            print(
-                "If __file__ is not defined, the directory above the current working directory is used as the target directory.")
-
-        os.chdir(parent_dir)
+    def _load_data_and_model(self, dataset, batch_size=16, seed=0, lamb=0):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_path = os.path.join(current_dir, 'csv_data', f'attack_{dataset.__class__.__name__}.csv')
 
         train_loader, val_loader, test_loader = build_loaders(
             csv_path=csv_path,
@@ -1132,68 +688,27 @@ class ATOM(BaseDefense):
             seed=seed
         )
 
-        # ======== Step 2: target_model, data =========
-        if data_path == "CiteSeer":
-            dataset = Planetoid(root="./data", name=data_path)
-            data = dataset[0]
-        elif data_path == "PubMed":
-            dataset = Planetoid(root="./data", name="PubMed")
-            data = dataset[0]
-        elif data_path == "Cora":
-            dataset = Planetoid(root="./data", name=data_path)
-            data = dataset[0]
-        elif data_path == "Cora_ML":
-            dataset = CitationFull(root="./data", name="Cora_ML")
-            data = dataset[0]
-            num_nodes = data.num_nodes
-            num_train = int(num_nodes * 0.6)
-            num_val = int(num_nodes * 0.2)
-            num_test = num_nodes - num_train - num_val
-            perm = torch.randperm(num_nodes)
-            data.train_mask = torch.zeros(num_nodes, dtype=torch.bool)
-            data.val_mask = torch.zeros(num_nodes, dtype=torch.bool)
-            data.test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+        trained_gcn = GCN(dataset.feature_number, 16, dataset.label_number)
+        target_model = TargetGCN(trained_model=trained_gcn, data=dataset)
 
-            data.train_mask[perm[:num_train]] = True
-            data.val_mask[perm[num_train:num_train + num_val]] = True
-            data.test_mask[perm[num_train + num_val:]] = True
-        elif data_path == "Cornell" or data_path == "Wisconsin":
-            dataset = WebKB(root="./data", name=data_path)
-            data = dataset[0]
-            num_nodes = data.num_nodes
-            num_train = int(num_nodes * 0.6)
-            num_val = int(num_nodes * 0.2)
-            num_test = num_nodes - num_train - num_val
-
-            perm = torch.randperm(num_nodes)
-            data.train_mask = torch.zeros(num_nodes, dtype=torch.bool)
-            data.val_mask = torch.zeros(num_nodes, dtype=torch.bool)
-            data.test_mask = torch.zeros(num_nodes, dtype=torch.bool)
-
-            data.train_mask[perm[:num_train]] = True
-            data.val_mask[perm[num_train:num_train + num_val]] = True
-            data.test_mask[perm[num_train + num_val:]] = True
-
-        trained_gcn = GCN(dataset.num_features, 16, dataset.num_classes)
-        target_model = TargetGCN(trained_model=trained_gcn, data=data)
-
-        G = to_networkx(data, to_undirected=True)
+        G = to_networkx(dataset.data, to_undirected=True)
         G.remove_edges_from(nx.selfloop_edges(G))
         k_core_values_graph = k_core_decomposition(G)
         max_k_core = torch.tensor(max(k_core_values_graph.values()), dtype=torch.float32)
 
         all_embeddings = precompute_all_node_embeddings(
-            target_model, data, k_core_values_graph, max_k_core, lamb=lamb
+            target_model, dataset.data, k_core_values_graph, max_k_core, lamb=lamb
         )
 
-        return train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, dataset, data
+        return train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, dataset
 
-    def defend(self, config: dict = {}):
+    def defend(self):
         accuracy_list = []
         precision_list = []
         recall_list = []
         f1_list = []
         auc_value_list = []
+        config: dict = {}
 
         seed = config.get("seed", 37719)
         K_epochs = config.get("K_epochs", 10)
@@ -1217,9 +732,10 @@ class ATOM(BaseDefense):
         seed_now = seed
         set_seed(seed_now)
 
-        train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, dataset, data = self._load_data_and_model()
+        train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, data = self._load_data_and_model(
+            self.dataset)
 
-        input_size = dataset.num_classes
+        input_size = data.num_classes  # todo change func name
         embedding_dim = input_size
         gru = FusionGRU(input_size=input_size, hidden_size=hidden_size).to(device)
         mlp_transform = StateTransformMLP(action_dim, hidden_action_dim, hidden_size).to(device)
@@ -1321,8 +837,3 @@ class ATOM(BaseDefense):
         print(report_metrics)
 
         return report_metrics
-
-
-if __name__ == "__main__":
-    atom = ATOM(Dataset, 0.0)
-    atom.defend()
