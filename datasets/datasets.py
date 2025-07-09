@@ -10,6 +10,7 @@ from dgl.data import MUTAGDataset  ### MUTAGData
 from dgl.data import RedditDataset
 from dgl.data import WikiCSDataset  ### WikiCS
 from dgl.data import citation_graph as citegrh
+from sklearn.model_selection import StratifiedShuffleSplit
 from torch_geometric.data import Data as PyGData
 from torch_geometric.datasets import DBLP  ### DBLP
 from torch_geometric.datasets import FacebookPagePage  ### Facebook
@@ -18,6 +19,7 @@ from torch_geometric.datasets import LastFMAsia  ### LastFM
 from torch_geometric.datasets import Planetoid  ### Cora, CiteSeer, PubMed
 from torch_geometric.datasets import PolBlogs  ### Polblogs
 from torch_geometric.datasets import Reddit  ### RedditData
+from torch_geometric.datasets import TUDataset  # ENZYMES
 from torch_geometric.datasets import Yelp  ### YelpData
 
 
@@ -956,4 +958,26 @@ class YelpData(Dataset):
         self.val_mask = self.data.val_mask
         self.test_mask = self.data.test_mask
 
+
 ####################################################################################################
+
+class ENZYMES(Dataset):
+    def __init__(self, api_type='torch_geometric', path='./downloads/'):
+        super().__init__(api_type, path)
+        if self.api_type == 'torch_geometric':
+            self.load_tg_data()
+        else:
+            raise ValueError("Only torch_geometric api_type is supported for ENZYMES.")
+
+    def load_tg_data(self):
+        dataset = TUDataset(root=self.path, name='ENZYMES')
+        data_list = [data for data in dataset]
+        all_x = torch.cat([d.x for d in data_list], dim=0)
+        mean, std = all_x.mean(0), all_x.std(0)
+        for d in data_list:
+            d.x = (d.x - mean) / (std + 1e-6)
+        all_labels = np.array([int(d.y) for d in data_list])
+        splitter = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        train_idx, test_idx = next(splitter.split(np.zeros(len(all_labels)), all_labels))
+        self.train_data = [data_list[i] for i in train_idx]
+        self.test_data = [data_list[i] for i in test_idx]
