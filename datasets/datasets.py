@@ -136,17 +136,21 @@ class Cora(Dataset):
 
         self.dataset = dataset
         self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes  # originally num_classes
+        self.feature_number = dataset.num_node_features  # dgl style
+        self.num_node_features = dataset.num_node_features  # tg style
+        self.label_number = dataset.num_classes  # dgl style
+        self.num_classes = dataset.num_classes  # tg style
 
         # features, labels
-        self.features = data.x
-        self.labels = data.y
+        self.features = data.x  # dgl style
+        self.x = data.x  # tg style
+        self.labels = data.y  # dgl style
+        self.y = data.y  # tg style
 
         # train_mask, test_mask, var_mask
         self.train_mask = data.train_mask
         self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
+        self.val_mask = data.val_mask
 
         self.node_number = data.num_nodes
         self.edge_index = data.edge_index
