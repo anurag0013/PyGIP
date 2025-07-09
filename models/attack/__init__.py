@@ -1,5 +1,5 @@
 from .base import BaseAttack
-from .mea import (
+from .mea.MEA import (
     ModelExtractionAttack0,
     ModelExtractionAttack1,
     ModelExtractionAttack2,

@@ -1,7 +1,8 @@
 import os
 import random
-import time
 import sys
+import time
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import networkx as nx
 import numpy as np
@@ -15,10 +16,12 @@ from models.nn import GCN, ShadowNet, AttackNet
 from utils.metrics import GraphNeuralNetworkMetric
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# device = torch.device('cpu')
+
 
 class ModelExtractionAttack(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
+        support_datasets = {"Cora", "Citeseer", "PubMed"}
+        assert dataset.__class__.__name__ in support_datasets, f"{dataset.__class__.__name__} is not supported."
 
         # Move tensors to device before calling super().__init__
         self.alpha = alpha
@@ -27,7 +30,7 @@ class ModelExtractionAttack(BaseAttack):
         self.labels = dataset.labels.to(device)
         self.train_mask = dataset.train_mask.to(device)
         self.test_mask = dataset.test_mask.to(device)
-        
+
         # Store original references
         dataset.graph = self.graph
         dataset.features = self.features
@@ -44,21 +47,21 @@ class ModelExtractionAttack(BaseAttack):
         # Initialize GNN model
         self.net1 = GCN(self.feature_number, self.label_number).to(device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
-        
+
         # Training loop
         for epoch in range(200):
             self.net1.train()
-            
+
             # Forward pass
             logits = self.net1(self.graph, self.features)
             logp = F.log_softmax(logits, dim=1)
             loss = F.nll_loss(logp[self.train_mask], self.labels[self.train_mask])
-            
+
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
+
             # Validation (optional)
             if epoch % 20 == 0:
                 self.net1.eval()
@@ -68,7 +71,7 @@ class ModelExtractionAttack(BaseAttack):
                     pred = logp_val.argmax(dim=1)
                     acc_val = (pred[self.test_mask] == self.labels[self.test_mask]).float().mean()
                     # You could print validation accuracy here
-                
+
         return self.net1
 
     def _load_model(self, model_path):
@@ -284,13 +287,15 @@ class ModelExtractionAttack1(ModelExtractionAttack):
     ModelExtractionAttack
     """
 
-    def __init__(self, dataset, attack_node_fraction, selected_node_file,
-                 query_label_file, shadow_graph_file=None):
+    def __init__(self, dataset, attack_node_fraction):
         super().__init__(dataset, attack_node_fraction)
         self.attack_node_number = 700
-        self.selected_node_file = selected_node_file
-        self.query_label_file = query_label_file
-        self.shadow_graph_file = shadow_graph_file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        generated_graph_dataset_path = os.path.join(current_dir, 'data', 'attack2_generated_graph',
+                                                    dataset.__class__.__name__.lower())
+        self.selected_node_file = os.path.join(generated_graph_dataset_path, "selected_index.txt")
+        self.query_label_file = os.path.join(generated_graph_dataset_path, "query_labels.txt")
+        self.shadow_graph_file = os.path.join(generated_graph_dataset_path, "graph_label.txt")
 
     def attack(self):
         """
@@ -565,27 +570,26 @@ class ModelExtractionAttack3(ModelExtractionAttack):
             torch.cuda.empty_cache()
             g_numpy = self.graph.adjacency_matrix().to_dense().cpu().numpy()
 
-            # defense_path = inspect.getfile(gnn_mea)
-            defense_path = os.path.abspath(__file__)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            shadow_graph_dataset_path = os.path.join(current_dir, 'data', 'attack3_shadow_graph',
+                                                     self.dataset.__class__.__name__.lower())
 
             sub_graph_index_b = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path,
-                    '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
-                    '/attack_6_sub_shadow_graph_index_attack_2.txt')), 'r') as fileObject:
+            with open(os.path.abspath(
+                    os.path.join(shadow_graph_dataset_path, 'attack_6_sub_shadow_graph_index_attack_2.txt')),
+                    'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path,
-                    '../../../pygip/data/attack3_shadow_graph/' + self.dataset.dataset_name +
-                    '/protential_1300_shadow_graph_index.txt')), 'r') as fileObject:
+            with open(
+                    os.path.abspath(os.path.join(shadow_graph_dataset_path, 'protential_1300_shadow_graph_index.txt')),
+                    'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 
             attack_node = []
-            while len(attack_node) < self.attack_node_number:
+            while len(attack_node) < self.attack_node_number:  # TODO potential bug: attack_node_num > all possible node
                 protential_node_index = random.randint(0, len(sub_graph_index_b) - 1)
                 protential_node = sub_graph_index_b[protential_node_index]
                 if protential_node not in attack_node:
@@ -666,7 +670,7 @@ class ModelExtractionAttack3(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = Gcn_Net(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.feature_number, self.label_number).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -748,19 +752,20 @@ class ModelExtractionAttack4(ModelExtractionAttack):
             torch.cuda.empty_cache()
 
             g_numpy = self.graph.adjacency_matrix().to_dense().cpu().numpy()
-            defense_path = inspect.getfile(gnn_mea)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            shadow_graph_dataset_path = os.path.join(current_dir, 'data', 'attack3_shadow_graph',
+                                                     self.dataset.__class__.__name__.lower())
 
             sub_graph_index_b = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
-                                  '/target_graph_index.txt')), 'r') as fileObject:
+            with open(os.path.abspath(os.path.join(shadow_graph_dataset_path, 'target_graph_index.txt')),
+                      'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path, '../../../pygip/data/' + self.dataset.dataset_name +
-                                  '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
+            with open(
+                    os.path.abspath(os.path.join(shadow_graph_dataset_path, 'protential_1200_shadow_graph_index.txt')),
+                    'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 
@@ -872,7 +877,7 @@ class ModelExtractionAttack4(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = Gcn_Net(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.feature_number, self.label_number).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -954,21 +959,20 @@ class ModelExtractionAttack5(ModelExtractionAttack):
             torch.cuda.empty_cache()
 
             g_numpy = self.graph.adjacency_matrix().to_dense().cpu().numpy()
-            defense_path = inspect.getfile(gnn_mea)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            shadow_graph_dataset_path = os.path.join(current_dir, 'data', 'attack3_shadow_graph',
+                                                     self.dataset.__class__.__name__.lower())
 
             sub_graph_index_b = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path,
-                    '../../../pygip/data/' + self.dataset.dataset_name +
-                    '/target_graph_index.txt')), 'r') as fileObject:
+            with open(os.path.abspath(os.path.join(shadow_graph_dataset_path, 'target_graph_index.txt')),
+                      'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_b.append(int(ip))
 
             sub_graph_index_a = []
-            with open(os.path.abspath(os.path.join(
-                    defense_path,
-                    '../../../pygip/data/' + self.dataset.dataset_name +
-                    '/protential_1200_shadow_graph_index.txt')), 'r') as fileObject:
+            with open(
+                    os.path.abspath(os.path.join(shadow_graph_dataset_path, 'protential_1200_shadow_graph_index.txt')),
+                    'r') as fileObject:
                 for ip in fileObject:
                     sub_graph_index_a.append(int(ip))
 
@@ -1079,7 +1083,7 @@ class ModelExtractionAttack5(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = Gcn_Net(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.feature_number, self.label_number).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
