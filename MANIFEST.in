@@ -1,0 +1,10 @@
+include LICENSE
+include README.md
+include reqs.txt
+
+recursive-include models *
+recursive-include datasets *
+recursive-include utils *
+recursive-include *.py
+
+global-exclude __pycache__ *.py[cod]

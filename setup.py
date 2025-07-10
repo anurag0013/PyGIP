@@ -6,13 +6,15 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="pygip",
     version="0.1.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Bolin Shen",
+    author_email="blshen@fsu.edu",
     description="A Python package for Graph Intellectual Property Protection",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/pygip",
-    packages=find_packages(),
+    url="https://github.com/pygip/pygip",
+    packages=find_packages(
+        include=["models*", "datasets*", "utils*"]
+    ),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
@@ -44,16 +46,6 @@ setup(
             "isort>=5.8.0",
         ],
     },
-    entry_points={
-        "console_scripts": [
-            "pygip=pygip.cli:main",
-        ],
-    },
-    package_data={
-        "pygip": [
-            "data/*",
-            "models/*",
-        ],
-    },
+    entry_points={},
     include_package_data=True,
 )
