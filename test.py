@@ -1,8 +1,8 @@
 from datasets import Cora
 from models.attack import ModelExtractionAttack5 as MEA
 
-from models.defense import BackdoorWM, SurviveWM
+from models.defense import ImperceptibleWM as DFS
 
 dataset = Cora()
-mea = MEA(dataset, 0.1)
-mea.attack()
+dfs = DFS(dataset, 0.1)
+dfs.defend()

@@ -6,10 +6,11 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
 
 from models.nn.backbones import GCN_PyG
+from utils.dglTopyg import dgl_to_pyg_data
 from .base import BaseDefense
 
 
-class OwnerWatermarkingDefense(BaseDefense):
+class ImperceptibleWM(BaseDefense):
 
     def __init__(self, dataset, attack_node_fraction=0.3, model_path=None):
         super().__init__(dataset, attack_node_fraction)
@@ -22,10 +23,12 @@ class OwnerWatermarkingDefense(BaseDefense):
         self.generator = TriggerGenerator(in_feats, 64, self.owner_id)
         self.model = GCN_PyG(in_feats, 128, num_classes)
 
-    def defend(self, pyg_graph):
-        bi_level_optimization(self.model, self.generator, pyg_graph)
-        trigger_data = generate_trigger_graph(pyg_graph, self.generator, self.model)
+    def defend(self):
+        pyg_data = dgl_to_pyg_data(self.dataset.graph)
+        bi_level_optimization(self.model, self.generator, pyg_data)
+        trigger_data = generate_trigger_graph(pyg_data, self.generator, self.model)
         metrics = calculate_metrics(self.model, trigger_data)
+        print(metrics)
         return metrics
 
     def _load_model(self):

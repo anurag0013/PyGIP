@@ -149,7 +149,7 @@ class TriggerGenerator(nn.Module):
         return trigger_features, edge_probs
 
 
-class WatermarkByBilevelOptimization(BaseDefense):
+class ImperceptibleWM2(BaseDefense):
     def __init__(self, dataset, attack_node_fraction=0.2, wm_node=50,
                  target_label=None, N=50, M=5,
                  epsilon1=1.0, epsilon2=0.5, epsilon3=1.0, owner_id=None,
@@ -191,9 +191,9 @@ class WatermarkByBilevelOptimization(BaseDefense):
 
         self.node_number = dataset.node_number if hasattr(dataset, 'node_number') else self.graph.num_nodes()
         self.feature_number = dataset.feature_number if hasattr(dataset, 'feature_number') else \
-        self.graph.ndata['feat'].shape[1]
+            self.graph.ndata['feat'].shape[1]
         self.label_number = dataset.label_number if hasattr(dataset, 'label_number') else (
-                    int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1)
+                int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1)
         self.attack_node_number = int(self.node_number * attack_node_fraction)
 
         self.wm_node = wm_node

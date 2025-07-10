@@ -1,15 +1,17 @@
-from .base import BaseDefense
-from .WatermarkDefense import (
-    WatermarkByRandomGraph,
-    BaseDefense
-)
-
 from .BackdoorWM import BackdoorWM
+from .ImperceptibleWM import ImperceptibleWM
+from .ImperceptibleWM2 import ImperceptibleWM2
+from .RandomWM import RandomWM
 from .SurviveWM import SurviveWM
+from .SurviveWM2 import SurviveWM2
+from .atom.ATOM import ATOM
 
 __all__ = [
-    'BaseDefense',
-    'WatermarkByRandomGraph',
     'BackdoorWM',
+    'ImperceptibleWM',
+    'ImperceptibleWM2',
+    'RandomWM',
     'SurviveWM',
+    'SurviveWM2',
+    'ATOM'
 ]

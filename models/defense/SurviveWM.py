@@ -1,15 +1,14 @@
-import time
 import os
 import sys
+import time
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import dgl
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 from tqdm import tqdm
 import networkx as nx
-import random
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 from models.defense.base import BaseDefense
@@ -29,13 +28,13 @@ class SurviveWM(BaseDefense):
         Load a pre-trained model.
         """
         from models.nn import GCN
-        
+
         # Create the model
         self.net1 = GCN(self.feature_number, self.label_number).to(device)
-        
+
         # Load the saved state dict
         self.net1.load_state_dict(torch.load(model_path, map_location=device))
-        
+
         # Set to evaluation mode
         self.net1.eval()
 
@@ -76,7 +75,7 @@ class SurviveWM(BaseDefense):
         # Convert DGL graph to edge_index format
         src, dst = base_graph.edges()
         base_edge_index = torch.stack([src, dst], dim=0)
-        
+
         x = torch.cat([base_features, trigger_data.x], dim=0)
         edge_index = torch.cat([base_edge_index, trigger_data.edge_index + base_features.size(0)], dim=1)
         y = torch.cat([base_labels, trigger_data.y], dim=0)
@@ -84,12 +83,12 @@ class SurviveWM(BaseDefense):
         # Create DGL graph from combined data
         src_combined, dst_combined = edge_index[0], edge_index[1]
         combined_graph = dgl.graph((src_combined, dst_combined), num_nodes=x.size(0)).to(device)
-        
+
         # **FIX: Add self-loops to handle zero in-degree nodes**
         combined_graph = dgl.add_self_loop(combined_graph)
-        
+
         combined_graph.ndata['feat'] = x.to(device)
-        
+
         return combined_graph, y.to(device)
 
     def train_with_snnl(self, model, graph, features, labels, train_mask, optimizer, T=0.5, alpha=0.1):
@@ -121,19 +120,19 @@ class SurviveWM(BaseDefense):
 
     def defend(self):
         print("=========SurviveWM Attack==========================")
-        
+
         # Generate trigger graph
         trigger_data = self.generate_key_graph().to(device)
-        
+
         # Combine base graph with trigger
         combined_graph, combined_labels = self.combine_with_trigger(
             self.graph, self.features, self.labels, trigger_data)
-        
+
         # Create train mask for combined data (include trigger nodes in training)
         base_train_mask = self.train_mask
         trigger_train_mask = torch.ones(trigger_data.num_nodes, dtype=torch.bool, device=device)
         combined_train_mask = torch.cat([base_train_mask, trigger_train_mask])
-        
+
         # Create test mask for combined data (exclude trigger nodes from testing)
         base_test_mask = self.test_mask
         trigger_test_mask = torch.zeros(trigger_data.num_nodes, dtype=torch.bool, device=device)
@@ -146,15 +145,15 @@ class SurviveWM(BaseDefense):
         # Create trigger graph for watermark verification
         trigger_src, trigger_dst = trigger_data.edge_index[0], trigger_data.edge_index[1]
         trigger_graph = dgl.graph((trigger_src, trigger_dst), num_nodes=trigger_data.num_nodes).to(device)
-        
+
         # **FIX: Add self-loops to trigger graph as well**
         trigger_graph = dgl.add_self_loop(trigger_graph)
-        
+
         trigger_graph.ndata['feat'] = trigger_data.x.to(device)
 
         dur = []
         best_performance_metrics = GraphNeuralNetworkMetric()
-        
+
         print("Training watermarked model...")
         for epoch in tqdm(range(200)):
             if epoch >= 3:
@@ -162,26 +161,26 @@ class SurviveWM(BaseDefense):
 
             # Train with SNNL
             loss = self.train_with_snnl(
-                watermarked_model, combined_graph, combined_graph.ndata['feat'], 
+                watermarked_model, combined_graph, combined_graph.ndata['feat'],
                 combined_labels, combined_train_mask, optimizer)
 
             if epoch >= 3:
                 dur.append(time.time() - t0)
-            
+
             # Evaluate periodically
             if epoch % 20 == 0:
                 watermarked_model.eval()
                 with torch.no_grad():
                     # Test on original graph (ensure it has self-loops)
                     test_graph = dgl.add_self_loop(self.graph)
-                    
+
                     logits = watermarked_model(test_graph, self.features)
                     pred = logits.argmax(dim=1)
                     test_acc = (pred[self.test_mask] == self.labels[self.test_mask]).float().mean()
-                    
+
                     # Verify watermark
                     wm_acc = self.verify_watermark(watermarked_model, trigger_graph, trigger_data.y)
-                    
+
                     print(f"Epoch {epoch}, Test Acc: {test_acc.item():.4f}, Watermark Acc: {wm_acc:.4f}")
 
         # Final evaluation
@@ -189,25 +188,25 @@ class SurviveWM(BaseDefense):
         with torch.no_grad():
             # Evaluate on test set (ensure graph has self-loops)
             test_graph = dgl.add_self_loop(self.graph)
-            
+
             logits = watermarked_model(test_graph, self.features)
             pred = logits.argmax(dim=1)
             probs = F.softmax(logits, dim=1)
-            
+
             test_metrics = self.compute_metrics(
                 self._to_cpu(self.labels[self.test_mask]).numpy(),
                 self._to_cpu(pred[self.test_mask]).numpy(),
                 self._to_cpu(probs[self.test_mask]).numpy()
             )
-            
+
             # Verify watermark
             wm_acc = self.verify_watermark(watermarked_model, trigger_graph, trigger_data.y)
-            
+
             # Create custom metrics object
             final_metrics = GraphNeuralNetworkMetric()
             final_metrics.accuracy = test_metrics['accuracy']
             final_metrics.fidelity = wm_acc  # Use watermark accuracy as fidelity measure
-            
+
             print("========================Final results:=========================================")
             print(f"Test Accuracy: {test_metrics['accuracy']:.4f}")
             print(f"Test F1: {test_metrics['f1']:.4f}")
@@ -215,7 +214,7 @@ class SurviveWM(BaseDefense):
             print(f"Test Recall: {test_metrics['recall']:.4f}")
             print(f"Watermark Accuracy: {wm_acc:.4f}")
             print(final_metrics)
-        
+
         self.net2 = watermarked_model
-        
+
         return final_metrics, watermarked_model

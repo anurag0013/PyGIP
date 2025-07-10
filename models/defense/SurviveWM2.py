@@ -431,7 +431,7 @@ class KeyInputOptimizer:
         return optimized_pairs
 
 
-class OptimizedWatermarkDefense(BaseDefense):
+class SurviveWM2(BaseDefense):
     def __init__(
             self,
             dataset,
