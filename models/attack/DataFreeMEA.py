@@ -1,10 +1,10 @@
+from abc import abstractmethod
+
+import dgl
+import networkx as nx
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
 from tqdm import tqdm
-import networkx as nx
-import dgl
-from abc import abstractmethod
 
 from models.attack.base import BaseAttack
 from models.nn import GCN, GraphSAGE  # Backbone architectures
@@ -30,6 +30,7 @@ class DFEAAttack(BaseAttack):
     Data-Free Extraction Attack base class.
     Handles victim model training/loading and synthetic graph generation.
     """
+
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         # Precompute validation mask for victim training
         self.val_mask = getattr(dataset, 'val_mask', dataset.test_mask)
@@ -63,7 +64,7 @@ class DFEAAttack(BaseAttack):
             )
             loss.backward()
             optimizer.step()
-            
+
         model.eval()
         self.model = model
 
@@ -105,6 +106,7 @@ class DFEATypeI(DFEAAttack):
     """
     Type I: Uses victim outputs + gradients for surrogate training.
     """
+
     def attack(self):
         surrogate = GCN(self.feature_number, self.label_number)
         optimizer = torch.optim.Adam(surrogate.parameters(), lr=0.01)
@@ -126,13 +128,16 @@ class DFEATypeI(DFEAAttack):
             )
             loss.backward()
             optimizer.step()
-        return self.evaluate(surrogate)
+        metric = self.evaluate(surrogate)
+        print('Agreement Acc: ', metric)
+        return metric
 
 
 class DFEATypeII(DFEAAttack):
     """
     Type II: Uses victim outputs only (hard labels).
     """
+
     def attack(self):
         surrogate = GraphSAGE(self.feature_number, 16, self.label_number)
         optimizer = torch.optim.Adam(surrogate.parameters(), lr=0.01)
@@ -150,21 +155,26 @@ class DFEATypeII(DFEAAttack):
             loss = F.cross_entropy(logits_s, pseudo)
             loss.backward()
             optimizer.step()
-        return self.evaluate(surrogate)
+        metric = self.evaluate(surrogate)
+        print('Agreement Acc: ', metric)
+        return metric
 
 
 class DFEATypeIII(DFEAAttack):
     """
     Type III: Two surrogates with victim supervision + consistency.
     """
+
     def attack(self):
         s1 = GCN(self.feature_number, self.label_number)
         s2 = GraphSAGE(self.feature_number, 16, self.label_number)
         opt1 = torch.optim.Adam(s1.parameters(), lr=0.01)
         opt2 = torch.optim.Adam(s2.parameters(), lr=0.01)
         for _ in tqdm(range(200)):
-            s1.train(); s2.train()
-            opt1.zero_grad(); opt2.zero_grad()
+            s1.train()
+            s2.train()
+            opt1.zero_grad()
+            opt2.zero_grad()
             # Victim pseudo-labels
             with torch.no_grad():
                 logits_v = self._forward(
@@ -180,8 +190,11 @@ class DFEATypeIII(DFEAAttack):
             cons = F.mse_loss(l1, l2)
             total = loss1 + loss2 + 0.5 * cons
             total.backward()
-            opt1.step(); opt2.step()
-        return self.evaluate(s1)
+            opt1.step()
+            opt2.step()
+        metric = self.evaluate(s1)
+        print('Agreement Acc: ', metric)
+        return metric
 
 
 # Factory mapping of attack names to classes

@@ -1,4 +1,10 @@
-from .base import BaseAttack
+from .AdvMEA import AdvMEA
+from .CEGA import CEGA
+from .DataFreeMEA import (
+    DFEATypeI,
+    DFEATypeII,
+    DFEATypeIII
+)
 from .mea.MEA import (
     ModelExtractionAttack0,
     ModelExtractionAttack1,
@@ -7,15 +13,17 @@ from .mea.MEA import (
     ModelExtractionAttack4,
     ModelExtractionAttack5
 )
-from .adversarial import AdversarialModelExtraction
 
 __all__ = [
-    'BaseAttack',
+    'AdvMEA',
+    'CEGA',
+    'DFEATypeI',
+    'DFEATypeII',
+    'DFEATypeIII',
     'ModelExtractionAttack0',
     'ModelExtractionAttack1',
     'ModelExtractionAttack2',
     'ModelExtractionAttack3',
     'ModelExtractionAttack4',
     'ModelExtractionAttack5',
-    'AdversarialModelExtraction',
 ]

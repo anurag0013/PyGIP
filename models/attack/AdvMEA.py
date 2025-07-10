@@ -1,6 +1,7 @@
-import time
 import os
 import sys
+import time
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import dgl
 import numpy as np
@@ -16,7 +17,8 @@ from models.nn import GCN
 # Use device from base class
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class AdversarialModelExtraction(BaseAttack):
+
+class AdvMEA(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction, model_path)
 
@@ -24,16 +26,48 @@ class AdversarialModelExtraction(BaseAttack):
         """
         Load a pre-trained model.
         """
-        from models.nn import GCN
-        
         # Create the model
         self.net1 = GCN(self.feature_number, self.label_number).to(device)
-        
+
         # Load the saved state dict
         self.net1.load_state_dict(torch.load(model_path, map_location=device))
-        
+
         # Set to evaluation mode
         self.net1.eval()
+
+    def _train_target_model(self):
+        """
+        Train the target model (GCN) on the original graph.
+        """
+        # Initialize GNN model
+        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
+
+        # Training loop
+        for epoch in range(200):
+            self.net1.train()
+
+            # Forward pass
+            logits = self.net1(self.graph, self.features)
+            logp = F.log_softmax(logits, dim=1)
+            loss = F.nll_loss(logp[self.train_mask], self.labels[self.train_mask])
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Validation (optional)
+            if epoch % 20 == 0:
+                self.net1.eval()
+                with torch.no_grad():
+                    logits_val = self.net1(self.graph, self.features)
+                    logp_val = F.log_softmax(logits_val, dim=1)
+                    pred = logp_val.argmax(dim=1)
+                    acc_val = (pred[self.test_mask] == self.labels[self.test_mask]).float().mean()
+                    # You could print validation accuracy here
+
+        return self.net1
 
     # Define a local to_cpu method to avoid inheritance issues
     def _to_cpu(self, tensor):
@@ -50,7 +84,7 @@ class AdversarialModelExtraction(BaseAttack):
         g_matrix = np.asmatrix(self._to_cpu(g.adjacency_matrix().to_dense()).numpy())
         edge_index = np.array(np.nonzero(g_matrix))
         edge_index = torch.tensor(edge_index, dtype=torch.long)
-        
+
         # Select a center node with certain size
         while True:
             node_index = torch.randint(0, self.node_number, (1,)).item()
@@ -60,7 +94,7 @@ class AdversarialModelExtraction(BaseAttack):
             if 45 <= sub_node_index.size(0) <= 50:
                 As = torch.zeros((sub_node_index.size(0), sub_node_index.size(0)))
                 As[sub_edge_index[0], sub_edge_index[1]] = 1
-                print("sub_node_index=",sub_node_index.size(0))
+                print("sub_node_index=", sub_node_index.size(0))
                 # Ensure moved to CPU
                 Xs = self._to_cpu(self.features[sub_node_index])
                 break
@@ -84,7 +118,7 @@ class AdversarialModelExtraction(BaseAttack):
 
         SA = [As]
         SX = [Xs]
-        
+
         # Query the target model
         self.net1.eval()
         with torch.no_grad():
@@ -158,7 +192,7 @@ class AdversarialModelExtraction(BaseAttack):
 
         print("=========Model Extracting==========================")
         best_performance_metrics = GraphNeuralNetworkMetric()
-        
+
         for epoch in tqdm(range(200)):
             if epoch >= 3:
                 t0 = time.time()
@@ -174,7 +208,7 @@ class AdversarialModelExtraction(BaseAttack):
 
             if epoch >= 3:
                 dur.append(time.time() - t0)
-                
+
             # Switch to evaluation mode
             net6.eval()
             with torch.no_grad():
@@ -189,7 +223,7 @@ class AdversarialModelExtraction(BaseAttack):
 
         print("========================Final results:=========================================")
         print(best_performance_metrics)
-        
+
         self.net2 = net6
 
         return best_performance_metrics, net6
