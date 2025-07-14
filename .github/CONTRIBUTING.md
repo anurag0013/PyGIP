@@ -38,22 +38,76 @@ Please follow the guidelines below to ensure a smooth contribution process.
 
 1. Fork the repository
 2. Create a new branch:
+
 ```shell
 git checkout -b feat/your-feature-name
 ```
+
 3. Commit your changes:
+
 ```shell
 git push origin feat/your-feature-name
 ```
+
 4. Push to your fork:
+
 ```shell
 git push origin feat/your-feature-name
 ```
+
 5. Open a PR against the `main` branch
 
 ---
 
+## 🔧 Internal Code Submission Guideline
+
+For internal team members with write access to the repository:
+
+1. Always Use Feature/Fix Branches
+
+- Never commit directly to the main or develop branch.
+- Create a new branch for each feature, bug fix.
+
+```shell
+git checkout -b feat/your-feature-name
+```
+
+```shell
+git checkout -b fix/your-fix-name
+```
+
+2. Keep Commits Clean & Meaningful
+
+- feat: add data loader for graph dataset
+- fix: resolve crash on edge cases
+
+Use clear commit messages following the format:
+
+```shell
+<type>: <summary>
+```
+
+3. Test Before Pushing
+
+- Test your implementation in `example.py`, and compare the performance with the results in original paper.
+
+4. Push to Internal Branch
+
+- Always run `git pull origin pygip-release` before pushing your changes
+- Submit a pull request targeting the `pygip-release` branch
+- Write a brief summary describing the features you’ve added, how to run your method, and how to evaluate its
+  performance
+
+Push to the remote feature branch.
+
+```shell
+git push origin feat/your-feature-name
+```
+
+---
+
 ## 📄 Code Style & Testing
+
 - Follow existing code conventions
 - Use meaningful names and comments
 - Add tests for new features or bug fixes
@@ -62,6 +116,7 @@ git push origin feat/your-feature-name
 ---
 
 ## 💬 Questions or Help?
+
 - Use Discussions for general questions
 - Feel free to open an issue if something is unclear
 
