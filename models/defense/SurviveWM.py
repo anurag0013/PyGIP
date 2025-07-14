@@ -12,9 +12,6 @@ from models.defense.base import BaseDefense
 from models.nn import GCN
 from utils.metrics import GraphNeuralNetworkMetric
 
-# Use device from base class
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class SurviveWM(BaseDefense):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
@@ -46,10 +43,10 @@ class SurviveWM(BaseDefense):
         assert self.model_path is not None, "Please provide a pre-trained model"
 
         # Create the model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.feature_number, self.label_number).to(self.device)
 
         # Load the saved state dict
-        self.net1.load_state_dict(torch.load(self.model_path, map_location=device))
+        self.net1.load_state_dict(torch.load(self.model_path, map_location=self.device))
 
         # Set to evaluation mode
         self.net1.eval()
@@ -66,7 +63,7 @@ class SurviveWM(BaseDefense):
     def snn_loss(self, x, y, T=0.5):
         x = F.normalize(x, p=2, dim=1)
         dist_matrix = torch.cdist(x, x, p=2) ** 2
-        eye = torch.eye(len(x), device=x.device).bool()
+        eye = torch.eye(len(x), device=x.self.device).bool()
         sim = torch.exp(-dist_matrix / T)
         mask_same = y.unsqueeze(1) == y.unsqueeze(0)
         sim = sim.masked_fill(eye, 0)
@@ -98,14 +95,14 @@ class SurviveWM(BaseDefense):
 
         # Create DGL graph from combined data
         src_combined, dst_combined = edge_index[0], edge_index[1]
-        combined_graph = dgl.graph((src_combined, dst_combined), num_nodes=x.size(0)).to(device)
+        combined_graph = dgl.graph((src_combined, dst_combined), num_nodes=x.size(0)).to(self.device)
 
         # **FIX: Add self-loops to handle zero in-degree nodes**
         combined_graph = dgl.add_self_loop(combined_graph)
 
-        combined_graph.ndata['feat'] = x.to(device)
+        combined_graph.ndata['feat'] = x.to(self.device)
 
-        return combined_graph, y.to(device)
+        return combined_graph, y.to(self.device)
 
     def train_with_snnl(self, model, graph, features, labels, train_mask, optimizer, T=0.5, alpha=0.1):
         model.train()
@@ -138,7 +135,7 @@ class SurviveWM(BaseDefense):
         print("=========SurviveWM Attack==========================")
 
         # Generate trigger graph
-        trigger_data = self.generate_key_graph().to(device)
+        trigger_data = self.generate_key_graph().to(self.device)
 
         # Combine base graph with trigger
         combined_graph, combined_labels = self.combine_with_trigger(
@@ -146,26 +143,26 @@ class SurviveWM(BaseDefense):
 
         # Create train mask for combined data (include trigger nodes in training)
         base_train_mask = self.train_mask
-        trigger_train_mask = torch.ones(trigger_data.num_nodes, dtype=torch.bool, device=device)
+        trigger_train_mask = torch.ones(trigger_data.num_nodes, dtype=torch.bool, device=self.device)
         combined_train_mask = torch.cat([base_train_mask, trigger_train_mask])
 
         # Create test mask for combined data (exclude trigger nodes from testing)
         base_test_mask = self.test_mask
-        trigger_test_mask = torch.zeros(trigger_data.num_nodes, dtype=torch.bool, device=device)
+        trigger_test_mask = torch.zeros(trigger_data.num_nodes, dtype=torch.bool, device=self.device)
         combined_test_mask = torch.cat([base_test_mask, trigger_test_mask])
 
         # Create watermarked model
-        watermarked_model = GCN(self.feature_number, self.label_number).to(device)
+        watermarked_model = GCN(self.feature_number, self.label_number).to(self.device)
         optimizer = torch.optim.Adam(watermarked_model.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Create trigger graph for watermark verification
         trigger_src, trigger_dst = trigger_data.edge_index[0], trigger_data.edge_index[1]
-        trigger_graph = dgl.graph((trigger_src, trigger_dst), num_nodes=trigger_data.num_nodes).to(device)
+        trigger_graph = dgl.graph((trigger_src, trigger_dst), num_nodes=trigger_data.num_nodes).to(self.device)
 
         # **FIX: Add self-loops to trigger graph as well**
         trigger_graph = dgl.add_self_loop(trigger_graph)
 
-        trigger_graph.ndata['feat'] = trigger_data.x.to(device)
+        trigger_graph.ndata['feat'] = trigger_data.x.to(self.device)
 
         dur = []
         best_performance_metrics = GraphNeuralNetworkMetric()

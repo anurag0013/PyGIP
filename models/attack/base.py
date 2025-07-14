@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import Union, Optional
 
 import torch
 
 from datasets import Dataset
 from utils.hardware import get_device
-from typing import Union, Optional
 
 
 class BaseAttack(ABC):

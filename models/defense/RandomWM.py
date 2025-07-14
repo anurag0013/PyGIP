@@ -12,8 +12,6 @@ from tqdm import tqdm
 from models.defense.base import BaseDefense
 from models.nn import GraphSAGE
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class RandomWM(BaseDefense):
     """
@@ -72,13 +70,13 @@ class RandomWM(BaseDefense):
         self.train_mask = self.graph.ndata['train_mask']
         self.test_mask = self.graph.ndata['test_mask']
 
-        # Move tensors to device
-        if device != 'cpu':
-            self.graph = self.graph.to(device)
-            self.features = self.features.to(device)
-            self.labels = self.labels.to(device)
-            self.train_mask = self.train_mask.to(device)
-            self.test_mask = self.test_mask.to(device)
+        # Move tensors to self.device
+        if self.device != 'cpu':
+            self.graph = self.graph.to(self.device)
+            self.features = self.features.to(self.device)
+            self.labels = self.labels.to(self.device)
+            self.train_mask = self.train_mask.to(self.device)
+            self.test_mask = self.test_mask.to(self.device)
 
     def _get_attack_class(self, attack_name):
         """
@@ -212,13 +210,13 @@ class RandomWM(BaseDefense):
         model = GraphSAGE(in_channels=self.feature_number,
                           hidden_channels=128,
                           out_channels=self.label_number)
-        model = model.to(device)
+        model = model.to(self.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
 
         # Setup data loading
         sampler = NeighborSampler([5, 5])
-        train_nids = self.train_mask.nonzero(as_tuple=True)[0].to(device)
-        test_nids = self.test_mask.nonzero(as_tuple=True)[0].to(device)
+        train_nids = self.train_mask.nonzero(as_tuple=True)[0].to(self.device)
+        test_nids = self.test_mask.nonzero(as_tuple=True)[0].to(self.device)
 
         train_collator = NodeCollator(self.graph, train_nids, sampler)
         test_collator = NodeCollator(self.graph, test_nids, sampler)
@@ -246,7 +244,7 @@ class RandomWM(BaseDefense):
             model.train()
             total_loss = 0
             for _, _, blocks in train_dataloader:
-                blocks = [b.to(device) for b in blocks]
+                blocks = [b.to(self.device) for b in blocks]
                 input_features = blocks[0].srcdata['feat']
                 output_labels = blocks[-1].dstdata['label']
 
@@ -263,7 +261,7 @@ class RandomWM(BaseDefense):
             total = 0
             with torch.no_grad():
                 for _, _, blocks in test_dataloader:
-                    blocks = [b.to(device) for b in blocks]
+                    blocks = [b.to(self.device) for b in blocks]
                     input_features = blocks[0].srcdata['feat']
                     output_labels = blocks[-1].dstdata['label']
                     output_predictions = model(blocks, input_features)
@@ -296,13 +294,13 @@ class RandomWM(BaseDefense):
         model = GraphSAGE(in_channels=self.feature_number,
                           hidden_channels=128,
                           out_channels=self.label_number)
-        model = model.to(device)
+        model = model.to(self.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
 
         # Setup data loading for original graph
         sampler = NeighborSampler([5, 5])
-        train_nids = self.train_mask.nonzero(as_tuple=True)[0].to(device)
-        test_nids = self.test_mask.nonzero(as_tuple=True)[0].to(device)
+        train_nids = self.train_mask.nonzero(as_tuple=True)[0].to(self.device)
+        test_nids = self.test_mask.nonzero(as_tuple=True)[0].to(self.device)
 
         train_collator = NodeCollator(self.graph, train_nids, sampler)
         test_collator = NodeCollator(self.graph, test_nids, sampler)
@@ -324,7 +322,7 @@ class RandomWM(BaseDefense):
         )
 
         # Setup data loading for watermark graph
-        wm_nids = torch.arange(wm_graph.number_of_nodes(), device=device)
+        wm_nids = torch.arange(wm_graph.number_of_nodes(), device=self.device)
         wm_collator = NodeCollator(wm_graph, wm_nids, sampler)
 
         wm_dataloader = DataLoader(
@@ -342,7 +340,7 @@ class RandomWM(BaseDefense):
             model.train()
             total_loss = 0
             for _, _, blocks in train_dataloader:
-                blocks = [b.to(device) for b in blocks]
+                blocks = [b.to(self.device) for b in blocks]
                 input_features = blocks[0].srcdata['feat']
                 output_labels = blocks[-1].dstdata['label']
 
@@ -359,7 +357,7 @@ class RandomWM(BaseDefense):
             total = 0
             with torch.no_grad():
                 for _, _, blocks in test_dataloader:
-                    blocks = [b.to(device) for b in blocks]
+                    blocks = [b.to(self.device) for b in blocks]
                     input_features = blocks[0].srcdata['feat']
                     output_labels = blocks[-1].dstdata['label']
                     output_predictions = model(blocks, input_features)
@@ -377,7 +375,7 @@ class RandomWM(BaseDefense):
             model.train()
             total_loss = 0
             for _, _, blocks in wm_dataloader:
-                blocks = [b.to(device) for b in blocks]
+                blocks = [b.to(self.device) for b in blocks]
                 input_features = blocks[0].srcdata['feat']
                 output_labels = blocks[-1].dstdata['label']
 
@@ -394,7 +392,7 @@ class RandomWM(BaseDefense):
         total = 0
         with torch.no_grad():
             for _, _, blocks in test_dataloader:
-                blocks = [b.to(device) for b in blocks]
+                blocks = [b.to(self.device) for b in blocks]
                 input_features = blocks[0].srcdata['feat']
                 output_labels = blocks[-1].dstdata['label']
                 output_predictions = model(blocks, input_features)
@@ -431,24 +429,24 @@ class RandomWM(BaseDefense):
         # Generate random features with binomial distribution
         wm_features = torch.tensor(np.random.binomial(
             1, self.pr, size=(self.wm_node, self.feature_number)),
-            dtype=torch.float32).to(device)
+            dtype=torch.float32).to(self.device)
 
         # Generate random labels
         wm_labels = torch.tensor(np.random.randint(
             low=0, high=self.label_number, size=self.wm_node),
-            dtype=torch.long).to(device)
+            dtype=torch.long).to(self.device)
 
         # Create DGL graph
         wm_graph = dgl.graph((wm_edge_index[0], wm_edge_index[1]), num_nodes=self.wm_node)
-        wm_graph = wm_graph.to(device)
+        wm_graph = wm_graph.to(self.device)
 
         # Add node features and labels
         wm_graph.ndata['feat'] = wm_features
         wm_graph.ndata['label'] = wm_labels
 
         # Add train and test masks (all True for simplicity)
-        wm_graph.ndata['train_mask'] = torch.ones(self.wm_node, dtype=torch.bool, device=device)
-        wm_graph.ndata['test_mask'] = torch.ones(self.wm_node, dtype=torch.bool, device=device)
+        wm_graph.ndata['train_mask'] = torch.ones(self.wm_node, dtype=torch.bool, device=self.device)
+        wm_graph.ndata['test_mask'] = torch.ones(self.wm_node, dtype=torch.bool, device=self.device)
 
         # Add self-loops
         wm_graph = dgl.add_self_loop(wm_graph)
@@ -476,7 +474,7 @@ class RandomWM(BaseDefense):
         total = 0
         with torch.no_grad():
             for _, _, blocks in wm_dataloader:
-                blocks = [b.to(device) for b in blocks]
+                blocks = [b.to(self.device) for b in blocks]
                 input_features = blocks[0].srcdata['feat']
                 output_labels = blocks[-1].dstdata['label']
                 output_predictions = model(blocks, input_features)
@@ -506,7 +504,7 @@ class RandomWM(BaseDefense):
 
         # Setup data loading for watermark graph
         sampler = NeighborSampler([5, 5])
-        wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=device)
+        wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=self.device)
         wm_collator = NodeCollator(self.watermark_graph, wm_nids, sampler)
 
         wm_dataloader = DataLoader(
@@ -557,7 +555,7 @@ class RandomWM(BaseDefense):
         elif model_name == 'GraphSAGE':
             # Setup data loading for watermark graph
             sampler = NeighborSampler([5, 5])
-            wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=device)
+            wm_nids = torch.arange(self.watermark_graph.number_of_nodes(), device=self.device)
             wm_collator = NodeCollator(self.watermark_graph, wm_nids, sampler)
 
             wm_dataloader = DataLoader(
@@ -574,7 +572,7 @@ class RandomWM(BaseDefense):
             total = 0
             with torch.no_grad():
                 for _, _, blocks in wm_dataloader:
-                    blocks = [b.to(device) for b in blocks]
+                    blocks = [b.to(self.device) for b in blocks]
                     input_features = blocks[0].srcdata['feat']
                     output_labels = blocks[-1].dstdata['label']
                     output_predictions = attack_model(blocks, input_features)

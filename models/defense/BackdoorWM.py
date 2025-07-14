@@ -8,9 +8,6 @@ from models.defense.base import BaseDefense
 from models.nn import GCN
 from utils.metrics import GraphNeuralNetworkMetric
 
-# Use device from base class
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class BackdoorWM(BaseDefense):
     def __init__(self, dataset, attack_node_fraction, model_path=None, trigger_rate=0.01, l=20, target_label=0):
@@ -44,10 +41,10 @@ class BackdoorWM(BaseDefense):
         assert self.model_path, "self.model_path should be defined"
 
         # Create the model
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
 
         # Load the saved state dict
-        self.net1.load_state_dict(torch.load(self.model_path, map_location=device))
+        self.net1.load_state_dict(torch.load(self.model_path, map_location=self.device))
 
         # Set to evaluation mode
         self.net1.eval()
@@ -76,7 +73,7 @@ class BackdoorWM(BaseDefense):
         Train the target model with backdoor injection.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Inject backdoor trigger
@@ -90,7 +87,7 @@ class BackdoorWM(BaseDefense):
             l=self.l,
             target_label=self.target_label
         )
-        poisoned_features = poisoned_features_cpu.to(device)
+        poisoned_features = poisoned_features_cpu.to(self.device)
 
         # Modify labels for trigger nodes
         for node in trigger_nodes:

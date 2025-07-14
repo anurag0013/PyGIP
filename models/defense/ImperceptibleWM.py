@@ -19,7 +19,7 @@ class ImperceptibleWM(BaseDefense):
         # load data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset
-        self.graph_data = dataset.graph_data
+        self.graph_data = dataset.graph_data.to(self.device)
         self.attack_node_fraction = attack_node_fraction
         self.model_path = model_path
 
@@ -29,7 +29,7 @@ class ImperceptibleWM(BaseDefense):
         num_classes = dataset.num_classes
 
         self.generator = TriggerGenerator(in_feats, 64, self.owner_id)
-        self.model = GCN_PyG(in_feats, 128, num_classes)
+        self.model = GCN_PyG(in_feats, 128, num_classes).to(self.device)
 
     def defend(self):
         pyg_data = self.graph_data
