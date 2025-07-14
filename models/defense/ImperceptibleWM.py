@@ -28,7 +28,7 @@ class ImperceptibleWM(BaseDefense):
         in_feats = dataset.num_features
         num_classes = dataset.num_classes
 
-        self.generator = TriggerGenerator(in_feats, 64, self.owner_id)
+        self.generator = TriggerGenerator(in_feats, 64, self.owner_id).to(self.device)
         self.model = GCN_PyG(in_feats, 128, num_classes).to(self.device)
 
     def defend(self):

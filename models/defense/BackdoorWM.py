@@ -16,7 +16,7 @@ class BackdoorWM(BaseDefense):
         # load data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset
-        self.graph_data = dataset.graph_data
+        self.graph_data = dataset.graph_data.to(device=self.device)
         self.model_path = model_path
         self.features = self.graph_data.ndata['feat']
         self.labels = self.graph_data.ndata['label']

@@ -20,13 +20,13 @@ class SurviveWM(BaseDefense):
         # load graph data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_data
-        self.graph_data = dataset.graph_data
+        self.graph_data = dataset.graph_data.to(device=self.device)
         self.model_path = model_path
         self.graph = self.graph_data
-        self.features = dataset.graph_data.ndata['feat']
-        self.labels = dataset.graph_data.ndata['label']
-        self.train_mask = dataset.graph_data.ndata['train_mask']
-        self.test_mask = dataset.graph_data.ndata['test_mask']
+        self.features = self.graph_data.ndata['feat']
+        self.labels = self.graph_data.ndata['label']
+        self.train_mask = self.graph_data.ndata['train_mask']
+        self.test_mask = self.graph_data.ndata['test_mask']
 
         # load meta data
         self.feature_number = dataset.num_features
@@ -63,7 +63,7 @@ class SurviveWM(BaseDefense):
     def snn_loss(self, x, y, T=0.5):
         x = F.normalize(x, p=2, dim=1)
         dist_matrix = torch.cdist(x, x, p=2) ** 2
-        eye = torch.eye(len(x), device=x.self.device).bool()
+        eye = torch.eye(len(x), device=self.device).bool()
         sim = torch.exp(-dist_matrix / T)
         mask_same = y.unsqueeze(1) == y.unsqueeze(0)
         sim = sim.masked_fill(eye, 0)

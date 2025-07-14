@@ -1,7 +1,7 @@
-from datasets import CiteSeer
-from models.defense import RandomWM as MEA
+from datasets import Cora
+from models.defense import ATOM as MEA
 
-dataset = CiteSeer(api_type='dgl')
+dataset = Cora(api_type='pyg')
 print(dataset)
 
 mea = MEA(dataset, attack_node_fraction=0.1)
