@@ -1,7 +1,5 @@
 import torch
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class GraphNeuralNetworkMetric:
     """
@@ -14,12 +12,12 @@ class GraphNeuralNetworkMetric:
     def __init__(self, fidelity=0, accuracy=0, model=None,
                  graph=None, features=None, mask=None,
                  labels=None, query_labels=None):
-        self.model = model.to(device) if model is not None else None
-        self.graph = graph.to(device) if graph is not None else None
-        self.features = features.to(device) if features is not None else None
-        self.mask = mask.to(device) if mask is not None else None
-        self.labels = labels.to(device) if labels is not None else None
-        self.query_labels = query_labels.to(device) if query_labels is not None else None
+        self.model = model if model is not None else None
+        self.graph = graph if graph is not None else None
+        self.features = features if features is not None else None
+        self.mask = mask if mask is not None else None
+        self.labels = labels if labels is not None else None
+        self.query_labels = query_labels if query_labels is not None else None
         self.accuracy = accuracy
         self.fidelity = fidelity
 

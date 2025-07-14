@@ -13,20 +13,18 @@ from models.attack.base import BaseAttack
 from models.nn import GCN, ShadowNet, AttackNet
 from utils.metrics import GraphNeuralNetworkMetric
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class ModelExtractionAttack(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
         # check dataset
-        support_datasets = {"Cora", "Citeseer", "PubMed"}
+        support_datasets = {"Cora", "CiteSeer", "PubMed"}
         assert dataset.__class__.__name__ in support_datasets, f"{dataset.__class__.__name__} is not supported."
         # check api type
         assert dataset.api_type == 'dgl', f"{dataset.api_type} is not supported."
         super().__init__(dataset, attack_node_fraction, model_path)
 
         self.alpha = alpha
-        self.graph = dataset.graph_data.to(device)
+        self.graph = dataset.graph_data.to(self.device)
         self.features = self.graph.ndata['feat']
         self.labels = self.graph.ndata['label']
         self.train_mask = self.graph.ndata['train_mask']
@@ -50,7 +48,7 @@ class ModelExtractionAttack(BaseAttack):
         Train the target model (GCN) on the original graph.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Training loop
@@ -83,7 +81,7 @@ class ModelExtractionAttack(BaseAttack):
         """
         Load a pre-trained model from a file.
         """
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
         self.net1.load_state_dict(torch.load(model_path))
         self.net1.eval()
         return self.net1
@@ -111,7 +109,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
         """
         try:
             torch.cuda.empty_cache()
-            g = self.graph.clone().to(device)
+            g = self.graph.clone().to(self.device)
             g_matrix = g.adjacency_matrix().to_dense().cpu().numpy()
             del g
 
@@ -148,7 +146,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
                             this_node_degree = len(self.get_nonzero_indices(g_matrix[first_order_node_index]))
                             features_query[node_index] += (
                                     self.features[first_order_node_index] * self.alpha /
-                                    torch.sqrt(torch.tensor(num_one_step * this_node_degree, device=device))
+                                    torch.sqrt(torch.tensor(num_one_step * this_node_degree, device=self.device))
                             )
 
                     two_step_nodes = []
@@ -176,7 +174,8 @@ class ModelExtractionAttack0(ModelExtractionAttack):
                             if this_node_second_degree > 0:
                                 features_query[node_index] += (
                                         self.features[second_order_node_index] * (1 - self.alpha) /
-                                        torch.sqrt(torch.tensor(num_two_step * this_node_second_degree, device=device))
+                                        torch.sqrt(
+                                            torch.tensor(num_two_step * this_node_second_degree, device=self.device))
                                 )
 
                 torch.cuda.empty_cache()
@@ -207,7 +206,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
             # Get query labels
             self.net1.eval()
             with torch.no_grad():
-                g = self.graph.to(device)
+                g = self.graph.to(self.device)
                 logits_query = self.net1(g, features_query)
                 _, labels_query = torch.max(logits_query, dim=1)
                 sub_labels_query = labels_query[total_sub_nodes]
@@ -218,16 +217,16 @@ class ModelExtractionAttack0(ModelExtractionAttack):
             sub_g.remove_edges_from(nx.selfloop_edges(sub_g))
             sub_g.add_edges_from(zip(sub_g.nodes(), sub_g.nodes()))
             sub_g = DGLGraph(sub_g)
-            sub_g = sub_g.to(device)
+            sub_g = sub_g.to(self.device)
 
             degs = sub_g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g.ndata['norm'] = norm.unsqueeze(1)
 
             # Train extraction model
-            net = GCN(self.num_features, self.num_classes).to(device)
+            net = GCN(self.num_features, self.num_classes).to(self.device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             best_performance_metrics = GraphNeuralNetworkMetric()
 
@@ -320,8 +319,8 @@ class ModelExtractionAttack1(ModelExtractionAttack):
                     if node_id in attack_nodes:
                         attack_query.append(label)
 
-            attack_query = torch.LongTensor(attack_query).to(device)
-            all_query_labels = torch.LongTensor(all_query_labels).to(device)
+            attack_query = torch.LongTensor(attack_query).to(self.device)
+            all_query_labels = torch.LongTensor(all_query_labels).to(self.device)
 
             with open(self.shadow_graph_file, "r") as shadow_graph_file:
                 lines = shadow_graph_file.readlines()
@@ -337,12 +336,12 @@ class ModelExtractionAttack1(ModelExtractionAttack):
             sub_g.remove_edges_from(nx.selfloop_edges(sub_g))
             sub_g.add_edges_from(zip(sub_g.nodes(), sub_g.nodes()))
             sub_g = DGLGraph(sub_g)
-            sub_g = sub_g.to(device)
+            sub_g = sub_g.to(self.device)
 
             degs = sub_g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g.ndata['norm'] = norm.unsqueeze(1)
 
             # Create target graph
@@ -352,15 +351,15 @@ class ModelExtractionAttack1(ModelExtractionAttack):
             sub_g_b.remove_edges_from(nx.selfloop_edges(sub_g_b))
             sub_g_b.add_edges_from(zip(sub_g_b.nodes(), sub_g_b.nodes()))
             sub_g_b = DGLGraph(sub_g_b)
-            sub_g_b = sub_g_b.to(device)
+            sub_g_b = sub_g_b.to(self.device)
 
             degs = sub_g_b.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
-            net = ShadowNet(self.num_features, self.num_classes).to(device)
+            net = ShadowNet(self.num_features, self.num_classes).to(self.device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -461,16 +460,16 @@ class ModelExtractionAttack2(ModelExtractionAttack):
                 _, labels_query = torch.max(logits_query, dim=1)
 
             syn_features_np = np.eye(self.num_nodes)
-            syn_features = torch.FloatTensor(syn_features_np).to(device)
-            g = self.graph.to(device)
+            syn_features = torch.FloatTensor(syn_features_np).to(self.device)
+            g = self.graph.to(self.device)
 
             degs = g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             g.ndata['norm'] = norm.unsqueeze(1)
 
-            net_attack = AttackNet(self.num_nodes, self.num_classes).to(device)
+            net_attack = AttackNet(self.num_nodes, self.num_classes).to(self.device)
             optimizer_original = torch.optim.Adam(net_attack.parameters(), lr=5e-2, weight_decay=5e-4)
 
             dur = []
@@ -484,7 +483,7 @@ class ModelExtractionAttack2(ModelExtractionAttack):
                 net_attack.train()
                 logits = net_attack(g, syn_features)
                 logp = F.log_softmax(logits, 1)
-                loss = F.nll_loss(logp[self.train_mask.to(device)], labels_query[self.train_mask].to(device))
+                loss = F.nll_loss(logp[self.train_mask.to(self.device)], labels_query[self.train_mask].to(self.device))
 
                 optimizer_original.zero_grad()
                 loss.backward()
@@ -496,9 +495,9 @@ class ModelExtractionAttack2(ModelExtractionAttack):
                 with torch.no_grad():
                     focus_gnn_metrics = GraphNeuralNetworkMetric(
                         0, 0, net_attack, g, syn_features,
-                        self.test_mask.to(device),
-                        self.labels.to(device),
-                        labels_query.to(device)
+                        self.test_mask.to(self.device),
+                        self.labels.to(self.device),
+                        labels_query.to(self.device)
                     )
                     focus_gnn_metrics.evaluate()
 
@@ -576,10 +575,10 @@ class ModelExtractionAttack3(ModelExtractionAttack):
                 if protential_node not in attack_node:
                     attack_node.append(int(protential_node))
 
-            attack_features = self.features[attack_node].to(device)
-            attack_labels = self.labels[attack_node].to(device)
-            shadow_features = self.features[sub_graph_index_a].to(device)
-            shadow_labels = self.labels[sub_graph_index_a].to(device)
+            attack_features = self.features[attack_node].to(self.device)
+            attack_labels = self.labels[attack_node].to(self.device)
+            shadow_features = self.features[sub_graph_index_a].to(self.device)
+            shadow_labels = self.labels[sub_graph_index_a].to(self.device)
 
             sub_graph_g_A = g_numpy[sub_graph_index_a]
             sub_graph_g_a = sub_graph_g_A[:, sub_graph_index_a]
@@ -597,30 +596,30 @@ class ModelExtractionAttack3(ModelExtractionAttack):
             generated_graph_2 = np.concatenate((zeros_2, sub_graph_g_a), axis=1)
             generated_graph = np.concatenate((generated_graph_1, generated_graph_2), axis=0)
 
-            generated_features = torch.cat((attack_features, shadow_features), dim=0).to(device)
-            generated_labels = torch.cat((attack_labels, shadow_labels), dim=0).to(device)
+            generated_features = torch.cat((attack_features, shadow_features), dim=0).to(self.device)
+            generated_labels = torch.cat((attack_labels, shadow_labels), dim=0).to(self.device)
 
-            generated_train_mask = torch.ones(len(generated_features), dtype=torch.bool, device=device)
-            generated_test_mask = torch.ones(len(generated_features), dtype=torch.bool, device=device)
+            generated_train_mask = torch.ones(len(generated_features), dtype=torch.bool, device=self.device)
+            generated_test_mask = torch.ones(len(generated_features), dtype=torch.bool, device=self.device)
 
             generated_g = nx.from_numpy_array(generated_graph)
             generated_g.remove_edges_from(nx.selfloop_edges(generated_g))
             generated_g.add_edges_from(zip(generated_g.nodes(), generated_g.nodes()))
             generated_g = DGLGraph(generated_g)
-            generated_g = generated_g.to(device)
+            generated_g = generated_g.to(self.device)
 
             degs = generated_g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             generated_g.ndata['norm'] = norm.unsqueeze(1)
 
             sub_graph_g_B = g_numpy[sub_graph_index_b]
             sub_graph_g_b = sub_graph_g_B[:, sub_graph_index_b]
-            sub_graph_features_b = self.features[sub_graph_index_b].to(device)
-            sub_graph_labels_b = self.labels[sub_graph_index_b].to(device)
-            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(device)
-            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(device)
+            sub_graph_features_b = self.features[sub_graph_index_b].to(self.device)
+            sub_graph_labels_b = self.labels[sub_graph_index_b].to(self.device)
+            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(self.device)
+            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(self.device)
 
             test_mask_length = min(len(sub_graph_test_mask_b), len(generated_train_mask))
             for i in range(test_mask_length):
@@ -638,12 +637,12 @@ class ModelExtractionAttack3(ModelExtractionAttack):
             sub_g_b.remove_edges_from(nx.selfloop_edges(sub_g_b))
             sub_g_b.add_edges_from(zip(sub_g_b.nodes(), sub_g_b.nodes()))
             sub_g_b = DGLGraph(sub_g_b)
-            sub_g_b = sub_g_b.to(device)
+            sub_g_b = sub_g_b.to(self.device)
 
             degs = sub_g_b.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
             self.net1.eval()
@@ -651,7 +650,7 @@ class ModelExtractionAttack3(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.num_features, self.num_classes).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(self.device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -809,29 +808,29 @@ class ModelExtractionAttack4(ModelExtractionAttack):
             generated_train_mask = torch.ones(len(generated_features), dtype=torch.bool)
             generated_test_mask = torch.ones(len(generated_features), dtype=torch.bool)
 
-            generated_features = torch.FloatTensor(generated_features).to(device)
-            generated_labels = torch.LongTensor(generated_labels).to(device)
-            generated_train_mask = generated_train_mask.to(device)
-            generated_test_mask = generated_test_mask.to(device)
+            generated_features = torch.FloatTensor(generated_features).to(self.device)
+            generated_labels = torch.LongTensor(generated_labels).to(self.device)
+            generated_train_mask = generated_train_mask.to(self.device)
+            generated_test_mask = generated_test_mask.to(self.device)
 
             generated_g = nx.from_numpy_array(generated_graph)
             generated_g.remove_edges_from(nx.selfloop_edges(generated_g))
             generated_g.add_edges_from(zip(generated_g.nodes(), generated_g.nodes()))
             generated_g = DGLGraph(generated_g)
-            generated_g = generated_g.to(device)
+            generated_g = generated_g.to(self.device)
 
             degs = generated_g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             generated_g.ndata['norm'] = norm.unsqueeze(1)
 
             sub_graph_g_B = np.array(g_numpy[sub_graph_index_b])
             sub_graph_g_b = np.array(sub_graph_g_B[:, sub_graph_index_b])
-            sub_graph_features_b = self.features[sub_graph_index_b].to(device)
-            sub_graph_labels_b = self.labels[sub_graph_index_b].to(device)
-            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(device)
-            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(device)
+            sub_graph_features_b = self.features[sub_graph_index_b].to(self.device)
+            sub_graph_labels_b = self.labels[sub_graph_index_b].to(self.device)
+            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(self.device)
+            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(self.device)
 
             for i in range(len(sub_graph_test_mask_b)):
                 if i >= 300:
@@ -845,12 +844,12 @@ class ModelExtractionAttack4(ModelExtractionAttack):
             sub_g_b.remove_edges_from(nx.selfloop_edges(sub_g_b))
             sub_g_b.add_edges_from(zip(sub_g_b.nodes(), sub_g_b.nodes()))
             sub_g_b = DGLGraph(sub_g_b)
-            sub_g_b = sub_g_b.to(device)
+            sub_g_b = sub_g_b.to(self.device)
 
             degs = sub_g_b.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
             self.net1.eval()
@@ -858,7 +857,7 @@ class ModelExtractionAttack4(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.num_features, self.num_classes).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(self.device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -1015,29 +1014,29 @@ class ModelExtractionAttack5(ModelExtractionAttack):
                     if loop == 999:
                         print("one isolated node!")
 
-            generated_features = torch.FloatTensor(generated_features).to(device)
-            generated_labels = torch.LongTensor(generated_labels).to(device)
-            generated_train_mask = torch.ones(len(generated_features), dtype=torch.bool, device=device)
-            generated_test_mask = torch.ones(len(generated_features), dtype=torch.bool, device=device)
+            generated_features = torch.FloatTensor(generated_features).to(self.device)
+            generated_labels = torch.LongTensor(generated_labels).to(self.device)
+            generated_train_mask = torch.ones(len(generated_features), dtype=torch.bool, device=self.device)
+            generated_test_mask = torch.ones(len(generated_features), dtype=torch.bool, device=self.device)
 
             generated_g = nx.from_numpy_array(generated_graph)
             generated_g.remove_edges_from(nx.selfloop_edges(generated_g))
             generated_g.add_edges_from(zip(generated_g.nodes(), generated_g.nodes()))
             generated_g = DGLGraph(generated_g)
-            generated_g = generated_g.to(device)
+            generated_g = generated_g.to(self.device)
 
             degs = generated_g.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             generated_g.ndata['norm'] = norm.unsqueeze(1)
 
             sub_graph_g_B = np.array(g_numpy[sub_graph_index_b])
             sub_graph_g_b = np.array(sub_graph_g_B[:, sub_graph_index_b])
-            sub_graph_features_b = self.features[sub_graph_index_b].to(device)
-            sub_graph_labels_b = self.labels[sub_graph_index_b].to(device)
-            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(device)
-            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(device)
+            sub_graph_features_b = self.features[sub_graph_index_b].to(self.device)
+            sub_graph_labels_b = self.labels[sub_graph_index_b].to(self.device)
+            sub_graph_train_mask_b = self.train_mask[sub_graph_index_b].to(self.device)
+            sub_graph_test_mask_b = self.test_mask[sub_graph_index_b].to(self.device)
 
             for i in range(len(sub_graph_test_mask_b)):
                 if i >= 300:
@@ -1051,12 +1050,12 @@ class ModelExtractionAttack5(ModelExtractionAttack):
             sub_g_b.remove_edges_from(nx.selfloop_edges(sub_g_b))
             sub_g_b.add_edges_from(zip(sub_g_b.nodes(), sub_g_b.nodes()))
             sub_g_b = DGLGraph(sub_g_b)
-            sub_g_b = sub_g_b.to(device)
+            sub_g_b = sub_g_b.to(self.device)
 
             degs = sub_g_b.in_degrees().float()
             norm = torch.pow(degs, -0.5)
             norm[torch.isinf(norm)] = 0
-            norm = norm.to(device)
+            norm = norm.to(self.device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
             self.net1.eval()
@@ -1064,7 +1063,7 @@ class ModelExtractionAttack5(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.num_features, self.num_classes).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(self.device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()

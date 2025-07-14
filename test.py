@@ -1,8 +1,8 @@
-from datasets import CiteSeer
-from models.defense import ATOM as MEAD
+from datasets import Cora
+from models.defense import ATOM as MEA
 
-dataset = CiteSeer(api_type='pyg')
+dataset = Cora(api_type='pyg')
 print(dataset)
 
-mead = MEAD(dataset, attack_node_fraction=0.1)
-mead.defend()
+mea = MEA(dataset, attack_node_fraction=0.1)
+mea.defend()

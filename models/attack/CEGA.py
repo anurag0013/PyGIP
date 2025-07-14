@@ -1356,7 +1356,7 @@ class CEGA(BaseAttack):
         assert dataset.api_type == 'dgl', "only support dgl api"
         # graph data
         self.dataset = dataset
-        self.graph = dataset.graph_data
+        self.graph = dataset.graph_data.to(self.device)
         self.features = dataset.graph_data.ndata['feat']
         self.labels = dataset.graph_data.ndata['label']
         self.train_mask = dataset.graph_data.ndata['train_mask']
@@ -1371,7 +1371,7 @@ class CEGA(BaseAttack):
     def attack(self, seed=1, cuda=None, LR=1e-3, TGT_LR=1e-2,
                EVAL_EPOCH=10, TGT_EPOCH=10, WARMUP_EPOCH=4, dropout=False, model_performance=True, **kwargs):
         # Initialization
-        device = 'cpu'
+        # device = 'cpu'
         set_seed(seed)
         metrics_df = pd.DataFrame(columns=['Num Attack Nodes', 'Method', 'Test Accuracy', 'Test Fidelity'])
 
@@ -1392,7 +1392,7 @@ class CEGA(BaseAttack):
 
         print('The attack node number is: ', attack_node_number)
 
-        g = g.to(device)
+        g = g.to(self.device)
         degs = g.in_degrees().float()
         norm = th.pow(degs, -0.5)
         norm[th.isinf(norm)] = 0
@@ -1407,11 +1407,11 @@ class CEGA(BaseAttack):
         dur = []
 
         ## Send the training to cuda
-        features = features.to(device)
-        gcn_Net = gcn_Net.to(device)
-        train_mask = train_mask.to(device)
-        test_mask = test_mask.to(device)
-        labels = labels.to(device)
+        features = features.to(self.device)
+        gcn_Net = gcn_Net.to(self.device)
+        train_mask = train_mask.to(self.device)
+        test_mask = test_mask.to(self.device)
+        labels = labels.to(self.device)
         target_performance = {
             'acc': 0,
             'f1score': 0
@@ -1489,10 +1489,10 @@ class CEGA(BaseAttack):
                 # caculate the feature: features =  0.8 * average_one + 0.8^2 * average_two
                 # new_array = features[first_order_node_index]*0.8/num_one_step
                 this_node_degree = len(g_matrix[first_order_node_index, :].nonzero()[1].tolist())
-                np_features_query[node_index] = torch.from_numpy(np.sum(
-                    [np_features_query[node_index],
-                     features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)],
-                    axis=0))
+                x1 = np_features_query[node_index]
+                x2 = features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)
+
+                np_features_query[node_index] = x1 + x2
 
                 two_step_node_index = g_matrix[first_order_node_index, :].nonzero()[1].tolist()
                 total_two_step_node_index = list(
@@ -1511,11 +1511,10 @@ class CEGA(BaseAttack):
                 this_node_second_step_nodes = list(set(this_node_second_step_nodes) - set(this_node_first_step_nodes))
 
                 this_node_second_degree = len(this_node_second_step_nodes)
-                np_features_query[node_index] = torch.from_numpy(np.sum(
-                    [np_features_query[node_index],
-                     features[second_order_node_index] * (1 - alpha) / math.sqrt(
-                         num_two_step * this_node_second_degree)],
-                    axis=0))
+                x1 = np_features_query[node_index]
+                x2 = features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)
+
+                np_features_query[node_index] = x1 + x2
 
         features_query = th.FloatTensor(np_features_query)
 
@@ -1765,14 +1764,14 @@ class CEGA(BaseAttack):
         #           'w') as f:
         #     json.dump(output_data, f)
 
-        sub_g = sub_g.to(device)
-        sub_features = sub_features.to(device)
-        sub_labels_query = sub_labels_query.to(device)
-        labels_query = labels_query.to(device)
-        g = g.to(device)
-        features = features.to(device)
-        test_mask = test_mask.to(device)
-        labels = labels.to(device)
+        sub_g = sub_g.to(self.device)
+        sub_features = sub_features.to(self.device)
+        sub_labels_query = sub_labels_query.to(self.device)
+        labels_query = labels_query.to(self.device)
+        g = g.to(self.device)
+        features = features.to(self.device)
+        test_mask = test_mask.to(self.device)
+        labels = labels.to(self.device)
 
         print('=========Model Evaluation==========================')
         if model_performance:
@@ -1789,8 +1788,8 @@ class CEGA(BaseAttack):
                 ## set up training nodes and send them to device
                 sub_train_scratch = th.zeros(sub_features.size()[0], dtype=th.bool)
                 sub_train_scratch[idx_train[:iter]] = True
-                sub_train_scratch = sub_train_scratch.to(device)
-                net_scratch = net_scratch.to(device)
+                sub_train_scratch = sub_train_scratch.to(self.device)
+                net_scratch = net_scratch.to(self.device)
 
                 ## Reset data
                 max_acc1 = 0
@@ -1859,8 +1858,8 @@ class CEGA(BaseAttack):
                 net_full = GcnNet(feature_number, label_number)
             optimizer_full = th.optim.Adam(net_full.parameters(), lr=LR, weight_decay=5e-4)
 
-            net_full = net_full.to(device)
-            net = net.to(device)
+            net_full = net_full.to(self.device)
+            net = net.to(self.device)
 
             perfm_attack = {
                 'acc': 0,
