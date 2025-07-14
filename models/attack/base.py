@@ -4,25 +4,21 @@ from datasets import Dataset
 
 
 class BaseAttack(ABC):
-    def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
+    def __init__(self, dataset: Dataset, attack_node_fraction: float = None, model_path: str = None):
         """Base class for all attack implementations."""
+        # graph data
         self.dataset = dataset
-        self.graph = dataset.graph
-        self.node_number = dataset.node_number
-        self.feature_number = dataset.feature_number
-        self.label_number = dataset.label_number
-        self.attack_node_number = int(dataset.node_number * attack_node_fraction)
+        self.graph_dataset = dataset.graph_dataset
+        self.graph_data = dataset.graph_data
+
+        # meta data
+        self.num_nodes = dataset.num_nodes
+        self.num_features = dataset.num_features
+        self.num_classes = dataset.num_classes
+
+        # params
         self.attack_node_fraction = attack_node_fraction
-
-        self.features = dataset.features
-        self.labels = dataset.labels
-        self.train_mask = dataset.train_mask
-        self.test_mask = dataset.test_mask
-
-        if model_path is None:
-            self._train_target_model()
-        else:
-            self._load_model(model_path)
+        self.model_path = model_path
 
     @abstractmethod
     def attack(self):

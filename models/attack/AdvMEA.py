@@ -1,8 +1,5 @@
-import os
-import sys
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import dgl
 import numpy as np
 import torch
@@ -11,8 +8,8 @@ from torch_geometric.utils import k_hop_subgraph, dense_to_sparse
 from tqdm import tqdm
 
 from models.attack.base import BaseAttack
-from utils.metrics import GraphNeuralNetworkMetric
 from models.nn import GCN
+from utils.metrics import GraphNeuralNetworkMetric
 
 # Use device from base class
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -21,13 +18,28 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class AdvMEA(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction, model_path)
+        self.graph = dataset.graph_data.to(device)
+        self.features = self.graph.ndata['feat']
+        self.labels = self.graph.ndata['label']
+        self.train_mask = self.graph.ndata['train_mask']
+        self.test_mask = self.graph.ndata['test_mask']
+
+        # meta data
+        self.num_nodes = dataset.num_nodes
+        self.num_features = dataset.num_features
+        self.num_classes = dataset.num_classes
+
+        if model_path is None:
+            self._train_target_model()
+        else:
+            self._load_model(model_path)
 
     def _load_model(self, model_path):
         """
         Load a pre-trained model.
         """
         # Create the model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
 
         # Load the saved state dict
         self.net1.load_state_dict(torch.load(model_path, map_location=device))
@@ -40,7 +52,7 @@ class AdvMEA(BaseAttack):
         Train the target model (GCN) on the original graph.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Training loop
@@ -87,10 +99,10 @@ class AdvMEA(BaseAttack):
 
         # Select a center node with certain size
         while True:
-            node_index = torch.randint(0, self.node_number, (1,)).item()
+            node_index = torch.randint(0, self.num_nodes, (1,)).item()
             # print("node_index=",node_index)
             sub_node_index, sub_edge_index, _, _ = k_hop_subgraph(node_index, 2, edge_index, relabel_nodes=True,
-                                                                  num_nodes=self.node_number)
+                                                                  num_nodes=self.num_nodes)
             if 45 <= sub_node_index.size(0) <= 50:
                 As = torch.zeros((sub_node_index.size(0), sub_node_index.size(0)))
                 As[sub_edge_index[0], sub_edge_index[1]] = 1
@@ -102,7 +114,7 @@ class AdvMEA(BaseAttack):
         # Construct the prior distribution
         Fd = []
         Md = []
-        for label in range(self.label_number):
+        for label in range(self.num_classes):
             # Ensure moved to CPU before converting to NumPy
             features_cpu = self._to_cpu(self.features)
             labels_cpu = self._to_cpu(self.labels)
@@ -113,7 +125,7 @@ class AdvMEA(BaseAttack):
             Fd.append(feature_distribution)
 
             num_features_per_node = class_nodes.sum(axis=1)
-            feature_count_distribution = np.bincount(num_features_per_node.astype(int), minlength=self.feature_number)
+            feature_count_distribution = np.bincount(num_features_per_node.astype(int), minlength=self.num_features)
             Md.append(feature_count_distribution / feature_count_distribution.sum())
 
         SA = [As]
@@ -141,7 +153,7 @@ class AdvMEA(BaseAttack):
 
         for i in range(n):
             # For each class, generate and store a new sampled subgraph
-            for c in range(self.label_number):
+            for c in range(self.num_classes):
                 num_nodes = As.shape[0]
                 Ac = torch.ones((num_nodes, num_nodes))
                 Xc = torch.zeros(num_nodes, len(Fd[c]))
@@ -185,7 +197,7 @@ class AdvMEA(BaseAttack):
         sub_g.ndata['feat'] = XG.to(device)
 
         # Create and train the extracted model
-        net6 = GCN(XG.shape[1], self.label_number).to(device)
+        net6 = GCN(XG.shape[1], self.num_classes).to(device)
         optimizer = torch.optim.Adam(net6.parameters(), lr=0.01, weight_decay=5e-4)
 
         dur = []

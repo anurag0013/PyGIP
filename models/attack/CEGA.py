@@ -1352,18 +1352,21 @@ from datasets import Dataset
 class CEGA(BaseAttack):
     def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
         """Base class for all attack implementations."""
+        super(CEGA, self).__init__(dataset)
+        assert dataset.api_type == 'dgl', "only support dgl api"
+        # graph data
         self.dataset = dataset
-        self.graph = dataset.graph
-        self.node_number = dataset.node_number
-        self.feature_number = dataset.feature_number
-        self.label_number = dataset.label_number
-        self.attack_node_number = int(dataset.node_number * attack_node_fraction)
+        self.graph = dataset.graph_data
+        self.features = dataset.graph_data.ndata['feat']
+        self.labels = dataset.graph_data.ndata['label']
+        self.train_mask = dataset.graph_data.ndata['train_mask']
+        self.test_mask = dataset.graph_data.ndata['test_mask']
+        # meta data
+        self.node_number = dataset.num_nodes
+        self.feature_number = dataset.num_features
+        self.label_number = dataset.num_classes
+        self.attack_node_number = int(dataset.num_nodes * attack_node_fraction)
         self.attack_node_fraction = attack_node_fraction
-
-        self.features = dataset.features
-        self.labels = dataset.labels
-        self.train_mask = dataset.train_mask
-        self.test_mask = dataset.test_mask
 
     def attack(self, seed=1, cuda=None, LR=1e-3, TGT_LR=1e-2,
                EVAL_EPOCH=10, TGT_EPOCH=10, WARMUP_EPOCH=4, dropout=False, model_performance=True, **kwargs):
@@ -1374,8 +1377,8 @@ class CEGA(BaseAttack):
 
         # g, features, labels, node_number, train_mask, test_mask = load_data(dataset_name)
         g = self.graph
-        features = self.dataset.features
-        labels = self.dataset.labels
+        features = self.features
+        labels = self.labels
         node_number = self.node_number
         train_mask = self.train_mask
         test_mask = self.test_mask

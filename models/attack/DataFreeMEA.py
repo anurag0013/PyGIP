@@ -32,10 +32,18 @@ class DFEAAttack(BaseAttack):
     """
 
     def __init__(self, dataset, attack_node_fraction, model_path=None):
-        # Precompute validation mask for victim training
-        self.val_mask = getattr(dataset, 'val_mask', dataset.test_mask)
-        # Initialize BaseAttack: will call either _train_target_model or _load_model
+        assert dataset.api_type == 'dgl', "only support dgl api"
         super().__init__(dataset, attack_node_fraction, model_path)
+        # load graph data
+        self.graph = dataset.graph_data
+        self.features = self.graph.ndata['feat']
+        self.labels = self.graph.ndata['label']
+        self.train_mask = self.graph.ndata['train_mask']
+        self.val_mask = self.graph.ndata['val_mask']
+        # meta data
+        self.feature_number = dataset.num_features
+        self.label_number = dataset.num_classes
+        self.attack_node_number = int(dataset.num_nodes * attack_node_fraction)
         # Generate synthetic graph and features for surrogate training
         self.generator = GraphGenerator(
             node_number=self.attack_node_number,
@@ -43,6 +51,10 @@ class DFEAAttack(BaseAttack):
             label_number=self.label_number
         )
         self.synthetic_graph, self.synthetic_features = self.generator.generate()
+        if model_path is None:
+            self._train_target_model()
+        else:
+            self._load_model(model_path)
 
     def _train_target_model(self):
         # Train the victim GCN model on real data (mirroring main.py)

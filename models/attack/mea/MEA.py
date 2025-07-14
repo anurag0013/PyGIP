@@ -1,9 +1,7 @@
 import os
 import random
-import sys
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import networkx as nx
 import numpy as np
 import torch
@@ -20,32 +18,39 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class ModelExtractionAttack(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
+        # check dataset
         support_datasets = {"Cora", "Citeseer", "PubMed"}
         assert dataset.__class__.__name__ in support_datasets, f"{dataset.__class__.__name__} is not supported."
-
-        # Move tensors to device before calling super().__init__
-        self.alpha = alpha
-        self.graph = dataset.graph.to(device)
-        self.features = dataset.features.to(device)
-        self.labels = dataset.labels.to(device)
-        self.train_mask = dataset.train_mask.to(device)
-        self.test_mask = dataset.test_mask.to(device)
-
-        # Store original references
-        dataset.graph = self.graph
-        dataset.features = self.features
-        dataset.labels = self.labels
-        dataset.train_mask = self.train_mask
-        dataset.test_mask = self.test_mask
-
+        # check api type
+        assert dataset.api_type == 'dgl', f"{dataset.api_type} is not supported."
         super().__init__(dataset, attack_node_fraction, model_path)
+
+        self.alpha = alpha
+        self.graph = dataset.graph_data.to(device)
+        self.features = self.graph.ndata['feat']
+        self.labels = self.graph.ndata['label']
+        self.train_mask = self.graph.ndata['train_mask']
+        self.test_mask = self.graph.ndata['test_mask']
+
+        # meta data
+        self.num_nodes = dataset.num_nodes
+        self.num_features = dataset.num_features
+        self.num_classes = dataset.num_classes
+
+        # attack params
+        self.attack_node_num = int(dataset.num_nodes * attack_node_fraction)
+
+        if model_path is None:
+            self._train_target_model()
+        else:
+            self._load_model(model_path)
 
     def _train_target_model(self):
         """
         Train the target model (GCN) on the original graph.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Training loop
@@ -78,7 +83,7 @@ class ModelExtractionAttack(BaseAttack):
         """
         Load a pre-trained model from a file.
         """
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
         self.net1.load_state_dict(torch.load(model_path))
         self.net1.eval()
         return self.net1
@@ -111,7 +116,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
             del g
 
             sub_graph_node_index = np.random.choice(
-                self.node_number, self.attack_node_number, replace=False).tolist()
+                self.num_nodes, self.attack_node_num, replace=False).tolist()
 
             batch_size = 32
             features_query = self.features.clone()
@@ -177,7 +182,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
                 torch.cuda.empty_cache()
 
             # Update masks
-            for i in range(self.node_number):
+            for i in range(self.num_nodes):
                 if i in sub_graph_node_index:
                     self.test_mask[i] = 0
                     self.train_mask[i] = 1
@@ -222,7 +227,7 @@ class ModelExtractionAttack0(ModelExtractionAttack):
             sub_g.ndata['norm'] = norm.unsqueeze(1)
 
             # Train extraction model
-            net = GCN(self.feature_number, self.label_number).to(device)
+            net = GCN(self.num_features, self.num_classes).to(device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             best_performance_metrics = GraphNeuralNetworkMetric()
 
@@ -263,33 +268,9 @@ class ModelExtractionAttack0(ModelExtractionAttack):
 
 
 class ModelExtractionAttack1(ModelExtractionAttack):
-    """
-    ModelExtractionAttack1.
-
-    A variant of extraction attack that reads selected nodes from a file
-    and constructs a shadow graph from another file.
-
-    Parameters
-    ----------
-    dataset : object
-        The dataset containing the graph, features, labels, etc.
-    attack_node_fraction : float
-        Fraction of nodes used for the attack.
-    selected_node_file : str
-        Path to a file containing the selected node IDs used for extraction.
-    query_label_file : str
-        Path to a file containing the query labels (node ID + label).
-    shadow_graph_file : str, optional
-        Path to a file describing the adjacency matrix of the shadow graph.
-
-    Inherits
-    --------
-    ModelExtractionAttack
-    """
-
     def __init__(self, dataset, attack_node_fraction):
         super().__init__(dataset, attack_node_fraction)
-        self.attack_node_number = 700
+        self.attack_node_num = 700
         current_dir = os.path.dirname(os.path.abspath(__file__))
         generated_graph_dataset_path = os.path.join(current_dir, 'data', 'attack2_generated_graph',
                                                     dataset.__class__.__name__.lower())
@@ -314,12 +295,12 @@ class ModelExtractionAttack1(ModelExtractionAttack):
                 attack_nodes = [int(line.strip()) for line in selected_node_file]
 
             # Identify the test nodes
-            testing_nodes = [i for i in range(self.node_number) if i not in attack_nodes]
+            testing_nodes = [i for i in range(self.num_nodes) if i not in attack_nodes]
 
             attack_features = self.features[attack_nodes]
 
             # Update masks
-            for i in range(self.node_number):
+            for i in range(self.num_nodes):
                 if i in attack_nodes:
                     self.test_mask[i] = 0
                     self.train_mask[i] = 1
@@ -344,7 +325,7 @@ class ModelExtractionAttack1(ModelExtractionAttack):
 
             with open(self.shadow_graph_file, "r") as shadow_graph_file:
                 lines = shadow_graph_file.readlines()
-                adj_matrix = np.zeros((self.attack_node_number, self.attack_node_number))
+                adj_matrix = np.zeros((self.attack_node_num, self.attack_node_num))
                 for line in lines:
                     src, dst = map(int, line.split())
                     adj_matrix[src][dst] = 1
@@ -379,7 +360,7 @@ class ModelExtractionAttack1(ModelExtractionAttack):
             norm = norm.to(device)
             sub_g_b.ndata['norm'] = norm.unsqueeze(1)
 
-            net = ShadowNet(self.feature_number, self.label_number).to(device)
+            net = ShadowNet(self.num_features, self.num_classes).to(device)
             optimizer = torch.optim.Adam(net.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -446,7 +427,7 @@ class ModelExtractionAttack2(ModelExtractionAttack):
         """
         Main attack procedure.
 
-        1. Randomly select `attack_node_number` nodes as training nodes.
+        1. Randomly select `attack_node_num` nodes as training nodes.
         2. Set up synthetic features as identity vectors for all nodes.
         3. Train a `Net_attack` model on these nodes with the queried labels.
         4. Evaluate fidelity & accuracy on a subset of leftover nodes.
@@ -455,13 +436,13 @@ class ModelExtractionAttack2(ModelExtractionAttack):
             torch.cuda.empty_cache()
 
             attack_nodes = []
-            for i in range(self.attack_node_number):
-                candidate_node = random.randint(0, self.node_number - 1)
+            for i in range(self.attack_node_num):
+                candidate_node = random.randint(0, self.num_nodes - 1)
                 if candidate_node not in attack_nodes:
                     attack_nodes.append(candidate_node)
 
             test_num = 0
-            for i in range(self.node_number):
+            for i in range(self.num_nodes):
                 if i in attack_nodes:
                     self.test_mask[i] = 0
                     self.train_mask[i] = 1
@@ -479,7 +460,7 @@ class ModelExtractionAttack2(ModelExtractionAttack):
                 logits_query = self.net1(self.graph, self.features)
                 _, labels_query = torch.max(logits_query, dim=1)
 
-            syn_features_np = np.eye(self.node_number)
+            syn_features_np = np.eye(self.num_nodes)
             syn_features = torch.FloatTensor(syn_features_np).to(device)
             g = self.graph.to(device)
 
@@ -489,7 +470,7 @@ class ModelExtractionAttack2(ModelExtractionAttack):
             norm = norm.to(device)
             g.ndata['norm'] = norm.unsqueeze(1)
 
-            net_attack = AttackNet(self.node_number, self.label_number).to(device)
+            net_attack = AttackNet(self.num_nodes, self.num_classes).to(device)
             optimizer_original = torch.optim.Adam(net_attack.parameters(), lr=5e-2, weight_decay=5e-4)
 
             dur = []
@@ -560,7 +541,7 @@ class ModelExtractionAttack3(ModelExtractionAttack):
 
         Steps:
         1. Loads indices for two subgraphs from text files.
-        2. Selects `attack_node_number` nodes from the first subgraph index.
+        2. Selects `attack_node_num` nodes from the first subgraph index.
         3. Merges subgraph adjacency matrices and constructs a new graph
            with combined features.
         4. Trains a new GCN and evaluates fidelity & accuracy w.r.t. the
@@ -589,7 +570,7 @@ class ModelExtractionAttack3(ModelExtractionAttack):
                     sub_graph_index_a.append(int(ip))
 
             attack_node = []
-            while len(attack_node) < self.attack_node_number:  # TODO potential bug: attack_node_num > all possible node
+            while len(attack_node) < self.attack_node_num:  # TODO potential bug: attack_node_num > all possible node
                 protential_node_index = random.randint(0, len(sub_graph_index_b) - 1)
                 protential_node = sub_graph_index_b[protential_node_index]
                 if protential_node not in attack_node:
@@ -670,7 +651,7 @@ class ModelExtractionAttack3(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -877,7 +858,7 @@ class ModelExtractionAttack4(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()
@@ -1083,7 +1064,7 @@ class ModelExtractionAttack5(ModelExtractionAttack):
                 logits_b = self.net1(sub_g_b, sub_graph_features_b)
                 _, query_b = torch.max(logits_b, dim=1)
 
-            net2 = GCN(self.feature_number, self.label_number).to(device)
+            net2 = GCN(self.num_features, self.num_classes).to(device)
             optimizer_a = torch.optim.Adam(net2.parameters(), lr=1e-2, weight_decay=5e-4)
             dur = []
             best_performance_metrics = GraphNeuralNetworkMetric()

@@ -1,26 +1,15 @@
 import dgl
 import numpy as np
 import torch
-from dgl.data import AmazonCoBuyComputerDataset  ### Computer
-from dgl.data import AmazonCoBuyPhotoDataset  ### Photo
-from dgl.data import FakeNewsDataset  ### Twitter
-from dgl.data import FlickrDataset
-from dgl.data import GINDataset  ### Collab, NCI1, PROTEINS, PTC, IMDB-BINARY
-from dgl.data import MUTAGDataset  ### MUTAGData
-from dgl.data import RedditDataset
-from dgl.data import WikiCSDataset  ### WikiCS
-from dgl.data import citation_graph as citegrh
+from dgl import DGLGraph
+from dgl.data import AmazonCoBuyComputerDataset  # Amazon-Computer
+from dgl.data import AmazonCoBuyPhotoDataset  # Amazon-Photo
+from dgl.data import citation_graph  # Cora, CiteSeer, PubMed
 from sklearn.model_selection import StratifiedShuffleSplit
 from torch_geometric.data import Data as PyGData
-from torch_geometric.datasets import DBLP  ### DBLP
-from torch_geometric.datasets import FacebookPagePage  ### Facebook
-from torch_geometric.datasets import Flickr  ### FlickrData
-from torch_geometric.datasets import LastFMAsia  ### LastFM
-from torch_geometric.datasets import Planetoid  ### Cora, CiteSeer, PubMed
-from torch_geometric.datasets import PolBlogs  ### Polblogs
-from torch_geometric.datasets import Reddit  ### RedditData
+from torch_geometric.datasets import Amazon  # Amazon Computers, Photo
+from torch_geometric.datasets import Planetoid  # Cora, CiteSeer, PubMed
 from torch_geometric.datasets import TUDataset  # ENZYMES
-from torch_geometric.datasets import Yelp  ### YelpData
 
 
 def dgl_to_tg(dgl_graph):
@@ -57,34 +46,77 @@ def tg_to_dgl(py_g_data):
 
 
 class Dataset(object):
-    def __init__(self, api_type='dgl', path='./downloads/'):
+    def __init__(self, api_type='dgl', path='./data'):
+        assert api_type in {'dgl', 'pyg'}, 'API type must be dgl or pyg'
         self.api_type = api_type
         self.path = path
-        self.dataset_name = ""
+        self.dataset_name = self.get_name()
 
-        self.node_number = 0
-        self.feature_number = 0
-        self.label_number = 0
+        # DGLGraph or PyGData
+        self.graph_dataset = None
+        self.graph_data = None
 
-        self.graph = None
-        self.features = None
-        self.labels = None
+        # meta data
+        self.num_nodes = 0
+        self.num_features = 0
+        self.num_classes = 0
 
-        # self.train_ratio = 0.8
-        self.train_mask = None
-        self.val_mask = None
-        self.test_mask = None
+    def get_name(self):
+        return self.__class__.__name__
 
     def load_dgl_data(self):
         raise NotImplementedError("load_dgl_data not implemented in subclasses.")
 
-    def load_tg_data(self):
-        raise NotImplementedError("load_dgl_data not implemented in subclasses.")
+    def load_pyg_data(self):
+        raise NotImplementedError("load_pyg_data not implemented in subclasses.")
 
-    def generate_train_test_masks(self):
-        num_nodes = self.node_number
+    def _load_meta_data(self):
+        if isinstance(self.graph_data, DGLGraph):
+            self.num_nodes = self.graph_data.number_of_nodes()
+            self.num_features = len(self.graph_data.ndata['feat'][0])
+            self.num_classes = int(max(self.graph_data.ndata['label']) - min(self.graph_data.ndata['label'])) + 1
+        elif isinstance(self.graph_data, PyGData):
+            self.num_nodes = self.graph_data.num_nodes
+            self.num_features = self.graph_dataset.num_node_features
+            self.num_classes = self.graph_dataset.num_classes
+        else:
+            raise TypeError("graph_data must be either DGLGraph or torch_geometric.data.Data.")
+
+    def _generate_train_test_masks(self, train_ratio=0.8):
+        if self.graph_data is None:
+            raise ValueError("graph_data is not loaded.")
+
+        try:
+            import dgl
+        except ImportError:
+            dgl = None
+
+        try:
+            from torch_geometric.data import Data
+        except ImportError:
+            Data = None
+
+        is_dgl = dgl and isinstance(self.graph_data, dgl.DGLGraph)
+        is_pyg = Data and isinstance(self.graph_data, Data)
+
+        if not (is_dgl or is_pyg):
+            raise TypeError("graph_data must be either DGLGraph or torch_geometric.data.Data.")
+
+        # Check if masks already exist
+        if is_dgl:
+            if all(k in self.graph_data.ndata for k in ['train_mask', 'val_mask', 'test_mask']):
+                print("Masks already exist in DGL graph. Skipping mask generation.")
+                return
+            num_nodes = self.graph_data.num_nodes()
+        else:  # PyG
+            if all(hasattr(self.graph_data, k) for k in ['train_mask', 'val_mask', 'test_mask']):
+                print("Masks already exist in PyG data. Skipping mask generation.")
+                return
+            num_nodes = self.graph_data.num_nodes
+
+        # Generate masks
         indices = torch.randperm(num_nodes)
-        train_size = int(self.train_ratio * num_nodes)
+        train_size = int(train_ratio * num_nodes)
         val_size = (num_nodes - train_size) // 2
 
         train_mask = torch.zeros(num_nodes, dtype=torch.bool)
@@ -95,885 +127,172 @@ class Dataset(object):
         val_mask[indices[train_size:train_size + val_size]] = True
         test_mask[indices[train_size + val_size:]] = True
 
-        self.train_mask = train_mask
-        self.val_mask = val_mask
-        self.test_mask = test_mask
+        # Store masks
+        if is_dgl:
+            self.graph_data.ndata['train_mask'] = train_mask
+            self.graph_data.ndata['val_mask'] = val_mask
+            self.graph_data.ndata['test_mask'] = test_mask
+        else:  # PyG
+            self.graph_data.train_mask = train_mask
+            self.graph_data.val_mask = val_mask
+            self.graph_data.test_mask = test_mask
+
+        print(f"Masks successfully generated and stored. (train_ratio={train_ratio})")
+
+    def __repr__(self):
+        return (f"Dataset(name={self.dataset_name}, api_type={self.api_type}, "
+                f"#Nodes={self.num_nodes}, #Features={self.num_features}, "
+                f"#Classes={self.num_classes})")
 
 
 class Cora(Dataset):
-    def __init__(self, api_type='dgl', path='./'):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
         if self.api_type == 'dgl':
             self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
         else:
             raise ValueError("Unsupported api_type.")
 
     def load_dgl_data(self):
-        data = citegrh.load_cora()
-        self.graph = data[0]
-        self.dataset_name = "cora"
+        dataset = citation_graph.load_cora()
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        # node_number, feature_number, label_number
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = len(self.graph.ndata['feat'][0])
-        self.label_number = int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1
-
-        # features, labels
-        self.features = torch.FloatTensor(self.graph.ndata['feat'])
-        self.labels = torch.LongTensor(self.graph.ndata['label'])
-
-        # train_mask, test_mask
-        self.train_mask = torch.BoolTensor(self.graph.ndata['train_mask'])
-        self.test_mask = torch.BoolTensor(self.graph.ndata['test_mask'])
-
-    def load_tg_data(self):
+    def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='Cora')
         data = dataset[0]
-        self.dataset_name = "cora"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features  # dgl style
-        self.num_node_features = dataset.num_node_features  # tg style
-        self.label_number = dataset.num_classes  # dgl style
-        self.num_classes = dataset.num_classes  # tg style
-
-        # features, labels
-        self.features = data.x  # dgl style
-        self.x = data.x  # tg style
-        self.labels = data.y  # dgl style
-        self.y = data.y  # tg style
-
-        # train_mask, test_mask, var_mask
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.val_mask = data.val_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
 
-class Citeseer(Dataset):
-    def __init__(self, api_type, path):
+class CiteSeer(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
         if self.api_type == 'dgl':
             self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
         else:
             raise ValueError("Unsupported api_type.")
 
     def load_dgl_data(self):
-        data = citegrh.load_citeseer()
-        self.graph = data[0]
-        self.dataset_name = "citeseer"
+        dataset = citation_graph.load_citeseer()
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = len(self.graph.ndata['feat'][0])
-        self.label_number = int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1
-
-        self.features = torch.FloatTensor(self.graph.ndata['feat'])
-        self.labels = torch.LongTensor(self.graph.ndata['label'])
-
-        self.train_mask = torch.BoolTensor(self.graph.ndata['train_mask'])
-        self.test_mask = torch.BoolTensor(self.graph.ndata['test_mask'])
-
-    def load_tg_data(self):
+    def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='Citeseer')
         data = dataset[0]
-        self.dataset_name = "citeseer"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class DBLPdata(Dataset):
-    def __init__(self, api_type='dgl', path='./'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = DBLP(self.path)
-        dblp_data = dataset[0]
-
-        edge_index = dblp_data['author', 'to', 'paper']._mapping['edge_index'].numpy()
-        num_nodes = max(edge_index[0].max(), edge_index[1].max()) + 1
-
-        self.graph = dgl.graph((edge_index[0], edge_index[1]), num_nodes=num_nodes)
-
-        author_node_indices = np.unique(edge_index[0])
-        author_subgraph = dgl.node_subgraph(self.graph, author_node_indices)
-        author_subgraph.ndata['feat'] = dblp_data['author'].x  # 节点特征
-        author_subgraph.ndata['label'] = dblp_data['author'].y  # 节点标签
-
-        self.train_mask = dblp_data['author'].train_mask
-        self.test_mask = dblp_data['author'].test_mask
-
-        self.graph = author_subgraph
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-
-    def load_tg_data(self):
-        dataset = DBLP(root=self.path)
-        data = dataset[0]
-        self.dataset_name = "dblp"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes  # originally num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
 
 class PubMed(Dataset):
-    def __init__(self, api_type, path):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
         if self.api_type == 'dgl':
             self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
         else:
             raise ValueError("Unsupported api_type.")
 
     def load_dgl_data(self):
-        data = citegrh.load_pubmed()
-        self.graph = data[0]
-        self.dataset_name = "pubmed"
+        dataset = citation_graph.load_pubmed()
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = len(self.graph.ndata['feat'][0])
-        self.label_number = int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1
-
-        self.features = torch.FloatTensor(self.graph.ndata['feat'])
-        self.labels = torch.LongTensor(self.graph.ndata['label'])
-
-        self.train_mask = torch.BoolTensor(self.graph.ndata['train_mask'])
-        self.test_mask = torch.BoolTensor(self.graph.ndata['test_mask'])
-
-    def load_tg_data(self):
+    def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='PubMed')
         data = dataset[0]
-        self.dataset_name = "pubmed"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
 
-class WikiCS(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
+class Computers(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
         if self.api_type == 'dgl':
             self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
         else:
             raise ValueError("Unsupported api_type.")
 
     def load_dgl_data(self):
-        dataset = WikiCSDataset(raw_dir=self.path)
-        self.graph = dgl.add_self_loop(dataset[0])
-        self.dataset_name = "wikics"
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", max(self.labels))
-
-        train_mask = self.graph.ndata['train_mask']
-        self.train_mask = train_mask[:, 1].bool()  # originally cross-validation
-        self.val_mask = self.graph.ndata['val_mask']
-        self.test_mask = self.graph.ndata['test_mask']
-        # print(True in train_mask[:, 1].bool())
-        # print("train shape:", self.train_mask.shape)
-        # print("train_mask:", self.train_mask)
-
-
-####################################################################################################
-class FacebookData(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = FacebookPagePage(root=self.path)
+        dataset = AmazonCoBuyComputerDataset(raw_dir=self.path)
         data = dataset[0]
-        self.train_ratio = 0.8
-        self.dataset_name = "facebook"
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        edge_index = data.edge_index.numpy()
-        self.graph = dgl.graph((edge_index[0], edge_index[1]))
-        # print(f"Graph: {self.graph}")
-        # print(f"Graph nodes: {self.graph.num_nodes()}")
-        # print(f"Graph edges: {self.graph.num_edges()}")
+        self._generate_train_test_masks()
 
-        self.graph.ndata['feat'] = data.x
-        self.graph.ndata['label'] = data.y
-
-        self.train_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        self.test_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        num_train = int(self.graph.num_nodes() * self.train_ratio)
-        perm = torch.randperm(self.graph.num_nodes())
-        self.train_mask[perm[:num_train]] = True
-        self.test_mask[perm[num_train:]] = True
-        # print(f"Node feature shape: {self.graph.ndata['feat'].shape}")
-        # print(f"Node label shape: {self.graph.ndata['label'].shape}")
-        # print(f"Train mask shape: {self.train_mask.shape}")
-        # print(f"Test mask shape: {self.test_mask.shape}")
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-
-    def load_tg_data(self):
-        dataset = FacebookPagePage(root=self.path)
+    def load_pyg_data(self):
+        dataset = Amazon(root=self.path, name='Computers')
         data = dataset[0]
-        self.dataset_name = "facebook"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes  # originally num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class FlickrData(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = FlickrDataset(self.path)
-        self.graph = dataset[0]
-        self.dataset_name = "flickr"
-
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-
-        self.train_mask = self.graph.ndata['train_mask']
-        self.val_mask = self.graph.ndata['val_mask']
-        self.test_mask = self.graph.ndata['test_mask']
-
-    def load_tg_data(self):
-        dataset = Flickr(self.path)
-        data = dataset[0]
-        self.dataset_name = "flickr"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.val_mask = data.val_mask
-        self.test_mask = data.test_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class PolblogsData(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = PolBlogs(root=self.path)
-        data = dataset[0]
-        self.train_ratio = 0.8
-        self.dataset_name = "polblogs"
-
-        edge_index = data.edge_index.numpy()
-        self.graph = dgl.graph((edge_index[0], edge_index[1]))
-        # print(f"Graph: {self.graph}")
-        # print(f"Graph nodes: {self.graph.num_nodes()}")
-        # print(f"Graph edges: {self.graph.num_edges()}")
-
-        self.graph.ndata['feat'] = data.x
-        self.graph.ndata['label'] = data.y
-
-        self.train_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        self.test_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        num_train = int(self.graph.num_nodes() * self.train_ratio)
-        perm = torch.randperm(self.graph.num_nodes())
-        self.train_mask[perm[:num_train]] = True
-        self.test_mask[perm[num_train:]] = True
-        # print(f"Node feature shape: {self.graph.ndata['feat'].shape}")
-        # print(f"Node label shape: {self.graph.ndata['label'].shape}")
-        # print(f"Train mask shape: {self.train_mask.shape}")
-        # print(f"Test mask shape: {self.test_mask.shape}")
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-
-    def load_tg_data(self):
-        dataset = PolBlogs(root=self.path)
-        data = dataset[0]
-        self.dataset_name = "polblogs"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes  # originally num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class LastFMdata(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = LastFMAsia(root=self.path)
-        data = dataset[0]
-        self.train_ratio = 0.8
-        self.dataset_name = "last-fm"
-
-        edge_index = data.edge_index.numpy()
-        self.graph = dgl.graph((edge_index[0], edge_index[1]))
-        # print(f"Graph: {self.graph}")
-        # print(f"Graph nodes: {self.graph.num_nodes()}")
-        # print(f"Graph edges: {self.graph.num_edges()}")
-
-        self.graph.ndata['feat'] = data.x
-        self.graph.ndata['label'] = data.y
-
-        self.train_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        self.test_mask = torch.zeros(self.graph.num_nodes(), dtype=torch.bool)
-        num_train = int(self.graph.num_nodes() * self.train_ratio)
-        perm = torch.randperm(self.graph.num_nodes())
-        self.train_mask[perm[:num_train]] = True
-        self.test_mask[perm[num_train:]] = True
-        # print(f"Node feature shape: {self.graph.ndata['feat'].shape}")
-        # print(f"Node label shape: {self.graph.ndata['label'].shape}")
-        # print(f"Train mask shape: {self.train_mask.shape}")
-        # print(f"Test mask shape: {self.test_mask.shape}")
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-
-    def load_tg_data(self):
-        dataset = LastFMAsia(root=self.path)
-        data = dataset[0]
-        self.dataset_name = "last-fm"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes  # originally num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.test_mask = data.test_mask
-        self.var_mask = data.var_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class RedditData(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = RedditDataset(raw_dir=self.path)
-        self.graph = dataset[0]
-        self.dataset_name = "reddit"
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", max(self.labels))
-
-        self.train_mask = self.graph.ndata['train_mask']
-        self.val_mask = self.graph.ndata['val_mask']
-        self.test_mask = self.graph.ndata['test_mask']
-        # print("train shape:", self.train_mask.shape)
-        # print("train_mask:", self.train_mask)
-
-    def load_tg_data(self):
-        dataset = Reddit(self.path)
-        data = dataset[0]
-        self.dataset_name = "reddit"
-
-        self.dataset = dataset
-        self.data = data
-        self.feature_number = dataset.num_node_features
-        self.label_number = dataset.num_classes
-
-        self.features = data.x
-        self.labels = data.y
-
-        self.train_mask = data.train_mask
-        self.val_mask = data.val_mask
-        self.test_mask = data.test_mask
-
-        self.node_number = data.num_nodes
-        self.edge_index = data.edge_index
-
-
-class Twitter(Dataset):
-    def __init__(self, api_type, path):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = FakeNewsDataset('gossipcop', 'bert', raw_dir=self.path)
-        graph, _ = dataset[0]
-        self.graph = dgl.add_self_loop(graph)
-        self.dataset_name = "twitter"
-        self.train_ratio = 0.8
-
-        if hasattr(dataset, 'feature'):
-            node_ids = self.graph.ndata['_ID'].numpy()
-            selected_features = dataset.feature[node_ids]
-            self.graph.ndata['feat'] = selected_features.float()
-
-        if hasattr(dataset, 'labels'):
-            selected_labels = dataset.labels[node_ids]
-            self.graph.ndata['label'] = selected_labels.long()
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", max(self.labels))
-
-        self.generate_train_test_masks()
-
-
-####################################################################################################
-
-class MutaData(Dataset):
-    def __init__(self, api_type, path):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = MUTAGDataset(raw_dir=self.path)
-        self.graph = dataset[0]
-        self.dataset_name = "mutag"
-
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['feat']
-        self.labels = self.dataset.predict_category
-
-        self.train_mask = self.graph.nodes[category].data['train_mask']
-        self.val_mask = self.graph.nodes[category].data['train_mask']
-        self.test_mask = self.graph.nodes[category].data['train_mask']
-
-
-class PTC(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = GINDataset(name='PTC', raw_dir=self.path, self_loop=False)
-        graph, _ = zip(*[dataset[i] for i in range(16)])
-        self.graph = dgl.batch(graph)
-
-        self.dataset_name = "ptc"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['attr'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['attr']
-        self.labels = self.graph.ndata['label']
-
-        self.generate_train_test_masks()
-
-
-class NCI1(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = GINDataset(name='NCI1', raw_dir=self.path, self_loop=False)
-        graph, _ = zip(*[dataset[i] for i in range(16)])
-        self.graph = dgl.batch(graph)
-
-        self.dataset_name = "nci1"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['attr'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['attr']
-        self.labels = self.graph.ndata['label']
-
-        self.generate_train_test_masks()
-
-
-####################################################################################################
-
-class PROTEINS(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = GINDataset(name='PROTEINS', raw_dir=self.path, self_loop=False)
-        graph, _ = zip(*[dataset[i] for i in range(16)])
-        self.graph = dgl.batch(graph)
-
-        self.dataset_name = "proteins"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['attr'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['attr']
-        self.labels = self.graph.ndata['label']
-
-        self.generate_train_test_masks()
-
-
-####################################################################################################
-
-class Collab(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = GINDataset(name='COLLAB', raw_dir=self.path, self_loop=False)
-        graph, _ = zip(*[dataset[i] for i in range(16)])
-        self.graph = dgl.batch(graph)
-
-        self.dataset_name = "collab"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['attr'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['attr']
-        self.labels = self.graph.ndata['label']
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", max(self.labels))
-        # print(self.graph.ndata.keys())
-
-        self.generate_train_test_masks()
-        # print("Number of selected nodes:", self.train_mask.sum().item())
-        # print("Node features shape:", self.features.shape)
-        # print("Node labels shape:", self.labels.shape)
-        # print("Node features example:", self.features[0])
-        # print("Node labels example:", self.labels[0])
-
-
-class IMDB(Dataset):
-    def __init__(self, api_type, path):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        dataset = GINDataset(name='IMDB-BINARY', raw_dir=self.path, self_loop=False)
-        graph, _ = zip(*[dataset[i] for i in range(16)])
-        self.graph = dgl.batch(graph)
-
-        self.dataset_name = "imdb"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['attr'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = self.graph.ndata['attr']
-        self.labels = self.graph.ndata['label']
-
-        self.generate_train_test_masks()
-
-
-####################################################################################################
-
-class Computer(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        data = AmazonCoBuyComputerDataset(raw_dir=self.path)
-        self.graph = dgl.add_self_loop(data[0])
-        self.dataset_name = "computer"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = torch.FloatTensor(self.graph.ndata['feat'])
-        self.labels = torch.LongTensor(self.graph.ndata['label'])
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", self.labels[3])
-
-        self.generate_train_test_masks()
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
+
+        self._generate_train_test_masks()
 
 
 class Photo(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
-        super().__init__(api_type, path)
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
-    def load_dgl_data(self):
-        data = AmazonCoBuyPhotoDataset(raw_dir=self.path)
-        self.graph = dgl.add_self_loop(data[0])
-        self.dataset_name = "photo"
-        self.train_ratio = 0.8
-
-        self.node_number = self.graph.number_of_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
-
-        self.features = torch.FloatTensor(self.graph.ndata['feat'])
-        self.labels = torch.LongTensor(self.graph.ndata['label'])
-        # print("Label shape:", self.labels.shape)
-        # print("Example labels:", self.labels[3])
-
-        self.generate_train_test_masks()
-
-
-class YelpData(Dataset):
-    def __init__(self, api_type='dgl', path='./downloads/'):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
         if self.api_type == 'dgl':
             self.load_dgl_data()
-        elif self.api_type == 'torch_geometric':
-            self.load_tg_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
         else:
             raise ValueError("Unsupported api_type.")
 
     def load_dgl_data(self):
-        dataset = dgl.data.YelpDataset(raw_dir=self.path)
-        self.graph = dataset[0]
-        self.dataset_name = "yelp"
+        dataset = AmazonCoBuyPhotoDataset(raw_dir=self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        self.node_number = self.graph.num_nodes()
-        self.feature_number = self.graph.ndata['feat'].shape[1]
-        self.label_number = len(torch.unique(self.graph.ndata['label']))
+        self._generate_train_test_masks()
 
-        self.features = self.graph.ndata['feat']
-        self.labels = self.graph.ndata['label']
+    def load_pyg_data(self):
+        dataset = Amazon(root=self.path, name='Photo')
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._load_meta_data()
 
-        self.train_mask = self.graph.ndata['train_mask']
-        self.val_mask = self.graph.ndata['val_mask']
-        self.test_mask = self.graph.ndata['test_mask']
+        self._generate_train_test_masks()
 
-    def load_tg_data(self):
-        dataset = Yelp(root=self.path)
-        self.data = dataset[0]
-        self.dataset_name = "yelp"
-
-        self.node_number = self.data.num_nodes
-        self.feature_number = self.data.x.shape[1]
-        self.label_number = len(torch.unique(self.data.y))
-
-        self.features = self.data.x
-        self.labels = self.data.y
-
-        self.train_mask = self.data.train_mask
-        self.val_mask = self.data.val_mask
-        self.test_mask = self.data.test_mask
-
-
-####################################################################################################
 
 class ENZYMES(Dataset):
-    def __init__(self, api_type='torch_geometric', path='./downloads/'):
+    def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
-        if self.api_type == 'torch_geometric':
-            self.load_tg_data()
-        else:
-            raise ValueError("Only torch_geometric api_type is supported for ENZYMES.")
 
-    def load_tg_data(self):
+        if self.api_type == 'pyg':
+            self.load_pyg_data()
+        else:
+            raise ValueError("Only pyg api_type is supported for ENZYMES.")
+
+    def load_pyg_data(self):
         dataset = TUDataset(root=self.path, name='ENZYMES')
         data_list = [data for data in dataset]
         all_x = torch.cat([d.x for d in data_list], dim=0)
