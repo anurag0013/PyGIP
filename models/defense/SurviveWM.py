@@ -1,19 +1,16 @@
-import os
-import sys
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import dgl
+import networkx as nx
 import torch
 import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from torch_geometric.data import Data
 from tqdm import tqdm
-import networkx as nx
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 from models.defense.base import BaseDefense
-from utils.metrics import GraphNeuralNetworkMetric
 from models.nn import GCN
+from utils.metrics import GraphNeuralNetworkMetric
 
 # Use device from base class
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -22,18 +19,37 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class SurviveWM(BaseDefense):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction)
+        assert dataset.api_type == 'dgl', 'only support dgl dataset'
+        # load graph data
+        self.dataset = dataset
+        self.graph_dataset = dataset.graph_data
+        self.graph_data = dataset.graph_data
+        self.model_path = model_path
+        self.graph = self.graph_data
+        self.features = dataset.graph_data.ndata['feat']
+        self.labels = dataset.graph_data.ndata['label']
+        self.train_mask = dataset.graph_data.ndata['train_mask']
+        self.test_mask = dataset.graph_data.ndata['test_mask']
 
-    def _load_model(self, model_path):
+        # load meta data
+        self.feature_number = dataset.num_features
+        self.label_number = dataset.num_classes
+
+        # params
+        self.attack_node_fraction = attack_node_fraction
+
+    def _load_model(self):
         """
         Load a pre-trained model.
         """
         from models.nn import GCN
+        assert self.model_path is not None, "Please provide a pre-trained model"
 
         # Create the model
         self.net1 = GCN(self.feature_number, self.label_number).to(device)
 
         # Load the saved state dict
-        self.net1.load_state_dict(torch.load(model_path, map_location=device))
+        self.net1.load_state_dict(torch.load(self.model_path, map_location=device))
 
         # Set to evaluation mode
         self.net1.eval()

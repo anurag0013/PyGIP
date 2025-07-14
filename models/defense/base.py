@@ -5,18 +5,18 @@ from datasets import Dataset
 
 class BaseDefense(ABC):
     def __init__(self, dataset: Dataset, attack_node_fraction: float):
-        """Base class for all defense implementations."""
+        # graph data
         self.dataset = dataset
-        self.graph = dataset.graph
-        self.node_number = dataset.node_number
-        self.feature_number = dataset.feature_number
-        self.label_number = dataset.label_number
-        self.attack_node_number = int(dataset.node_number * attack_node_fraction)
+        self.graph_dataset = dataset.graph_dataset
+        self.graph_data = dataset.graph_data
 
-        self.features = dataset.features
-        self.labels = dataset.labels
-        self.train_mask = dataset.train_mask
-        self.test_mask = dataset.test_mask
+        # meta data
+        self.num_nodes = dataset.num_nodes
+        self.num_features = dataset.num_features
+        self.num_classes = dataset.num_classes
+
+        # params
+        self.attack_node_fraction = attack_node_fraction
 
     @abstractmethod
     def defend(self):

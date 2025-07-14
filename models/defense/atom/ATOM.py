@@ -672,8 +672,8 @@ class ATOM(BaseDefense):
     def __init__(self, dataset: PyGIPDataset, attack_node_fraction: float = 0):
         """Base class for all defense implementations."""
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'torch_geometric'
-        support_dataset = {'Cora', 'Citeseer', 'PubMed'}
+        assert dataset.api_type == 'pyg'
+        support_dataset = {'Cora', 'CiteSeer', 'PubMed'}
         assert dataset.__class__.__name__ in support_dataset
         self.dataset = dataset
 
@@ -688,16 +688,16 @@ class ATOM(BaseDefense):
             seed=seed
         )
 
-        trained_gcn = GCN(dataset.feature_number, 16, dataset.label_number)
-        target_model = TargetGCN(trained_model=trained_gcn, data=dataset)
+        trained_gcn = GCN(dataset.num_features, 16, dataset.num_classes)
+        target_model = TargetGCN(trained_model=trained_gcn, data=dataset.graph_data)
 
-        G = to_networkx(dataset.data, to_undirected=True)
+        G = to_networkx(dataset.graph_data, to_undirected=True)
         G.remove_edges_from(nx.selfloop_edges(G))
         k_core_values_graph = k_core_decomposition(G)
         max_k_core = torch.tensor(max(k_core_values_graph.values()), dtype=torch.float32)
 
         all_embeddings = precompute_all_node_embeddings(
-            target_model, dataset.data, k_core_values_graph, max_k_core, lamb=lamb
+            target_model, dataset.graph_data, k_core_values_graph, max_k_core, lamb=lamb
         )
 
         return train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, dataset

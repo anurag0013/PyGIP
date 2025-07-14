@@ -1,24 +1,19 @@
-import os
-import sys
+import importlib
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import torch
-import torch.nn.functional as F
 import dgl
 import numpy as np
-from tqdm import tqdm
-from torch_geometric.utils import erdos_renyi_graph
+import torch
+import torch.nn.functional as F
 from dgl.dataloading import NeighborSampler, NodeCollator
 from torch.utils.data import DataLoader
-import importlib
+from torch_geometric.utils import erdos_renyi_graph
+from tqdm import tqdm
 
 from models.defense.base import BaseDefense
 from models.nn import GraphSAGE
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# device = torch.device('cpu')
 
 class RandomWM(BaseDefense):
     """
@@ -52,17 +47,16 @@ class RandomWM(BaseDefense):
         attack_name : str, optional
             Name of the attack class to use (default: None, will use ModelExtractionAttack0)
         """
-        self.attack_name = attack_name or "ModelExtractionAttack0"
         super().__init__(dataset, attack_node_fraction)
+        assert dataset.api_type == 'dgl', "only support dgl dataset"
+        self.attack_name = attack_name or "ModelExtractionAttack0"
         self.dataset = dataset
-        self.graph = dataset.graph
+        self.graph = dataset.graph_data
 
         # Extract dataset properties
-        self.node_number = dataset.node_number if hasattr(dataset, 'node_number') else self.graph.num_nodes()
-        self.feature_number = dataset.feature_number if hasattr(dataset, 'feature_number') else \
-        self.graph.ndata['feat'].shape[1]
-        self.label_number = dataset.label_number if hasattr(dataset, 'label_number') else (
-                    int(max(self.graph.ndata['label']) - min(self.graph.ndata['label'])) + 1)
+        self.node_number = dataset.num_nodes
+        self.feature_number = dataset.num_features
+        self.label_number = dataset.num_classes
         self.attack_node_number = int(self.node_number * attack_node_fraction)
 
         # Watermark parameters
@@ -71,12 +65,12 @@ class RandomWM(BaseDefense):
         self.pg = pg
 
         # Extract features and labels
-        self.features = dataset.features if hasattr(dataset, 'features') else self.graph.ndata['feat']
-        self.labels = dataset.labels if hasattr(dataset, 'labels') else self.graph.ndata['label']
+        self.features = self.graph.ndata['feat']
+        self.labels = self.graph.ndata['label']
 
         # Extract masks
-        self.train_mask = dataset.train_mask if hasattr(dataset, 'train_mask') else self.graph.ndata['train_mask']
-        self.test_mask = dataset.test_mask if hasattr(dataset, 'test_mask') else self.graph.ndata['test_mask']
+        self.train_mask = self.graph.ndata['train_mask']
+        self.test_mask = self.graph.ndata['test_mask']
 
         # Move tensors to device
         if device != 'cpu':

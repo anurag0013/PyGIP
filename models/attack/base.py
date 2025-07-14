@@ -5,7 +5,6 @@ from datasets import Dataset
 
 class BaseAttack(ABC):
     def __init__(self, dataset: Dataset, attack_node_fraction: float = None, model_path: str = None):
-        """Base class for all attack implementations."""
         # graph data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset

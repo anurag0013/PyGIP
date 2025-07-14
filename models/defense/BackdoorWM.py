@@ -1,15 +1,12 @@
-import os
-import sys
+import random
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
-import random
 
 from models.defense.base import BaseDefense
-from utils.metrics import GraphNeuralNetworkMetric
 from models.nn import GCN
+from utils.metrics import GraphNeuralNetworkMetric
 
 # Use device from base class
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -17,22 +14,40 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class BackdoorWM(BaseDefense):
     def __init__(self, dataset, attack_node_fraction, model_path=None, trigger_rate=0.01, l=20, target_label=0):
+        super().__init__(dataset, attack_node_fraction)
+        assert dataset.api_type == 'dgl', "only support dgl dataset"
+        # load data
+        self.dataset = dataset
+        self.graph_dataset = dataset.graph_dataset
+        self.graph_data = dataset.graph_data
+        self.model_path = model_path
+        self.features = self.graph_data.ndata['feat']
+        self.labels = self.graph_data.ndata['label']
+        self.train_mask = self.graph_data.ndata['train_mask']
+        self.test_mask = self.graph_data.ndata['test_mask']
+
+        # load meta data
+        self.num_nodes = dataset.num_nodes
+        self.num_features = dataset.num_features
+        self.num_classes = dataset.num_classes
+
+        # wm params
         self.trigger_rate = trigger_rate
         self.l = l
         self.target_label = target_label
-        super().__init__(dataset, attack_node_fraction)
 
-    def _load_model(self, model_path):
+    def _load_model(self):
         """
         Load a pre-trained model.
         """
         from models.nn import GCN
+        assert self.model_path, "self.model_path should be defined"
 
         # Create the model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
 
         # Load the saved state dict
-        self.net1.load_state_dict(torch.load(model_path, map_location=device))
+        self.net1.load_state_dict(torch.load(self.model_path, map_location=device))
 
         # Set to evaluation mode
         self.net1.eval()
@@ -61,7 +76,7 @@ class BackdoorWM(BaseDefense):
         Train the target model with backdoor injection.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.feature_number, self.label_number).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Inject backdoor trigger
@@ -90,7 +105,7 @@ class BackdoorWM(BaseDefense):
             self.net1.train()
 
             # Forward pass
-            logits = self.net1(self.graph, poisoned_features)
+            logits = self.net1(self.graph_data, poisoned_features)
             logp = F.log_softmax(logits, dim=1)
             loss = F.nll_loss(logp[self.train_mask], poisoned_labels[self.train_mask])
 
@@ -103,7 +118,7 @@ class BackdoorWM(BaseDefense):
             if epoch % 50 == 0:
                 self.net1.eval()
                 with torch.no_grad():
-                    logits_val = self.net1(self.graph, poisoned_features)
+                    logits_val = self.net1(self.graph_data, poisoned_features)
                     logp_val = F.log_softmax(logits_val, dim=1)
                     pred = logp_val.argmax(dim=1)
                     acc_val = (pred[self.test_mask] == poisoned_labels[self.test_mask]).float().mean()
@@ -115,7 +130,7 @@ class BackdoorWM(BaseDefense):
         """Verify backdoor attack success rate"""
         model.eval()
         with torch.no_grad():
-            out = model(self.graph, self.poisoned_features)
+            out = model(self.graph_data, self.poisoned_features)
             pred = out.argmax(dim=1)
             correct = (pred[trigger_nodes] == target_label).sum().item()
             return correct / len(trigger_nodes)
@@ -124,7 +139,7 @@ class BackdoorWM(BaseDefense):
         """Evaluate model performance"""
         model.eval()
         with torch.no_grad():
-            out = model(self.graph, features)
+            out = model(self.graph_data, features)
             logits = out[self.test_mask]
             preds = logits.argmax(dim=1).cpu()
             labels_test = labels[self.test_mask].cpu()

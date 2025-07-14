@@ -1,12 +1,13 @@
 import copy
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sklearn.metrics import precision_score, recall_score, f1_score
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
 
 from models.nn.backbones import GCN_PyG
-from utils.dglTopyg import dgl_to_pyg_data
 from .base import BaseDefense
 
 
@@ -14,17 +15,24 @@ class ImperceptibleWM(BaseDefense):
 
     def __init__(self, dataset, attack_node_fraction=0.3, model_path=None):
         super().__init__(dataset, attack_node_fraction)
+        assert dataset.api_type == 'pyg', 'only support pyg dataset'
+        # load data
+        self.dataset = dataset
+        self.graph_dataset = dataset.graph_dataset
+        self.graph_data = dataset.graph_data
+        self.attack_node_fraction = attack_node_fraction
         self.model_path = model_path
-        self.owner_id = dataset.graph.ndata['feat'].new_tensor([0.1, 0.3, 0.5, 0.7, 0.9])
 
-        in_feats = dataset.graph.ndata['feat'].shape[1]
-        num_classes = int(dataset.graph.ndata['label'].max().item()) + 1
+        self.owner_id = torch.tensor([0.1, 0.3, 0.5, 0.7, 0.9], dtype=torch.float32, device=self.graph_data.x.device)
+
+        in_feats = dataset.num_features
+        num_classes = dataset.num_classes
 
         self.generator = TriggerGenerator(in_feats, 64, self.owner_id)
         self.model = GCN_PyG(in_feats, 128, num_classes)
 
     def defend(self):
-        pyg_data = dgl_to_pyg_data(self.dataset.graph)
+        pyg_data = self.graph_data
         bi_level_optimization(self.model, self.generator, pyg_data)
         trigger_data = generate_trigger_graph(pyg_data, self.generator, self.model)
         metrics = calculate_metrics(self.model, trigger_data)
@@ -118,29 +126,6 @@ def generate_trigger_graph(data, generator, target_model, num_triggers=50):
     return new_data
 
 
-def train_model(model, data, epochs=200, wm_weight=0.2):
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-    criterion = nn.CrossEntropyLoss()
-
-    for epoch in range(epochs):
-        model.train()
-        optimizer.zero_grad()
-        out = model(data.x, data.edge_index)
-
-        main_loss = criterion(out[data.train_mask], data.y[data.train_mask])
-
-        wm_loss = 0
-        if hasattr(data, 'trigger_nodes'):
-            trigger_mask = data.trigger_mask
-            wm_loss = criterion(out[trigger_mask], data.y[trigger_mask])
-
-        loss = (1 - wm_weight) * main_loss + wm_weight * wm_loss
-        loss.backward()
-        optimizer.step()
-
-    return calculate_metrics(model, data)
-
-
 def bi_level_optimization(target_model, generator, data, epochs=100, inner_steps=5):
     optimizer_model = torch.optim.Adam(target_model.parameters(), lr=0.01)
     optimizer_gen = torch.optim.Adam(generator.parameters(), lr=0.01)
@@ -184,16 +169,6 @@ def bi_level_optimization(target_model, generator, data, epochs=100, inner_steps
         optimizer_gen.step()
 
 
-import torch
-from torch_geometric.datasets import Planetoid
-from sklearn.metrics import precision_score, recall_score, f1_score
-from torch_geometric.transforms import NormalizeFeatures
-
-
-def load_dataset(name):
-    return Planetoid(root=f'/tmp/{name}', name=name, transform=NormalizeFeatures())
-
-
 def calculate_metrics(model, data):
     model.eval()
     with torch.no_grad():
@@ -219,7 +194,7 @@ def calculate_metrics(model, data):
         }
 
         if hasattr(data, 'trigger_nodes'):
-            wm_mask = torch.zeros(data.x.size(0), dtype=torch.bool, device=data.x.device)  # ✅ fixed here
+            wm_mask = torch.zeros(data.x.size(0), dtype=torch.bool, device=data.x.device)
             wm_mask[data.trigger_nodes] = True
             wm_pred = pred[wm_mask]
             wm_true = true[wm_mask]
