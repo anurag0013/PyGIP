@@ -51,6 +51,8 @@ class DFEAAttack(BaseAttack):
             label_number=self.label_number
         )
         self.synthetic_graph, self.synthetic_features = self.generator.generate()
+        self.synthetic_graph = self.synthetic_graph.to(self.device)
+        self.synthetic_features = self.synthetic_features.to(self.device)
         if model_path is None:
             self._train_target_model()
         else:

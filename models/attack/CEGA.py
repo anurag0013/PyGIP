@@ -1489,10 +1489,10 @@ class CEGA(BaseAttack):
                 # caculate the feature: features =  0.8 * average_one + 0.8^2 * average_two
                 # new_array = features[first_order_node_index]*0.8/num_one_step
                 this_node_degree = len(g_matrix[first_order_node_index, :].nonzero()[1].tolist())
-                np_features_query[node_index] = torch.from_numpy(np.sum(
-                    [np_features_query[node_index],
-                     features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)],
-                    axis=0))
+                x1 = np_features_query[node_index]
+                x2 = features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)
+
+                np_features_query[node_index] = x1 + x2
 
                 two_step_node_index = g_matrix[first_order_node_index, :].nonzero()[1].tolist()
                 total_two_step_node_index = list(
@@ -1511,11 +1511,10 @@ class CEGA(BaseAttack):
                 this_node_second_step_nodes = list(set(this_node_second_step_nodes) - set(this_node_first_step_nodes))
 
                 this_node_second_degree = len(this_node_second_step_nodes)
-                np_features_query[node_index] = torch.from_numpy(np.sum(
-                    [np_features_query[node_index],
-                     features[second_order_node_index] * (1 - alpha) / math.sqrt(
-                         num_two_step * this_node_second_degree)],
-                    axis=0))
+                x1 = np_features_query[node_index]
+                x2 = features[first_order_node_index] * alpha / math.sqrt(num_one_step * this_node_degree)
+
+                np_features_query[node_index] = x1 + x2
 
         features_query = th.FloatTensor(np_features_query)
 

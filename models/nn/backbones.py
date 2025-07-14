@@ -6,9 +6,6 @@ from torch_geometric.nn import GATConv
 from torch_geometric.nn import GCNConv
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
 class GCN(nn.Module):
     """A simple GCN Network."""
 
@@ -18,11 +15,8 @@ class GCN(nn.Module):
         self.layers.append(GraphConv(feature_number, 16, activation=F.relu))
         self.layers.append(GraphConv(16, label_number))
         self.dropout = nn.Dropout(p=0.5)
-        self.to(device)
 
     def forward(self, g, features):
-        g = g.to(device)
-        features = features.to(device)
         x = F.relu(self.layers[0](g, features))
         x = self.layers[1](g, x)
         return x

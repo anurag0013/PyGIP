@@ -1,8 +1,8 @@
 from datasets import CiteSeer
-from models.defense import ATOM as MEAD
+from models.attack import CEGA as MEA
 
-dataset = CiteSeer(api_type='pyg')
+dataset = CiteSeer(api_type='dgl')
 print(dataset)
 
-mead = MEAD(dataset, attack_node_fraction=0.1)
-mead.defend()
+mea = MEA(dataset, attack_node_fraction=0.1)
+mea.attack(EVAL_EPOCH=2, TGT_EPOCH=2, WARMUP_EPOCH=1)

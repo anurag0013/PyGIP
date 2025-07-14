@@ -222,7 +222,7 @@ class AdvMEA(BaseAttack):
             net6.eval()
             with torch.no_grad():
                 focus_gnn_metrics = GraphNeuralNetworkMetric(
-                    0, 0, net6, g, self.features, self.test_mask, self.labels, self._to_cpu(labels_query))
+                    0, 0, net6, g, self.features, self.test_mask, self.labels, labels_query)
                 focus_gnn_metrics.evaluate()
 
                 best_performance_metrics.fidelity = max(
