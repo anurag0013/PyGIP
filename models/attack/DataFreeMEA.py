@@ -35,7 +35,7 @@ class DFEAAttack(BaseAttack):
         assert dataset.api_type == 'dgl', "only support dgl api"
         super().__init__(dataset, attack_node_fraction, model_path)
         # load graph data
-        self.graph = dataset.graph_data
+        self.graph = dataset.graph_data.to(self.device)
         self.features = self.graph.ndata['feat']
         self.labels = self.graph.ndata['label']
         self.train_mask = self.graph.ndata['train_mask']
@@ -58,7 +58,7 @@ class DFEAAttack(BaseAttack):
 
     def _train_target_model(self):
         # Train the victim GCN model on real data (mirroring main.py)
-        model = GCN(self.feature_number, self.label_number)
+        model = GCN(self.feature_number, self.label_number).to(self.device)
         optimizer = torch.optim.Adam(
             model.parameters(), lr=0.01, weight_decay=5e-4
         )
@@ -83,7 +83,7 @@ class DFEAAttack(BaseAttack):
     def _load_model(self, model_path):
         # Load a pretrained victim model
         model = GCN(self.feature_number, self.label_number)
-        state = torch.load(model_path, map_location=torch.device('cpu'))
+        state = torch.load(model_path, map_location=self.device)
         model.load_state_dict(state)
         model.eval()
         self.model = model
@@ -120,7 +120,7 @@ class DFEATypeI(DFEAAttack):
     """
 
     def attack(self):
-        surrogate = GCN(self.feature_number, self.label_number)
+        surrogate = GCN(self.feature_number, self.label_number).to(self.device)
         optimizer = torch.optim.Adam(surrogate.parameters(), lr=0.01)
         for _ in tqdm(range(200)):
             surrogate.train()
@@ -151,7 +151,7 @@ class DFEATypeII(DFEAAttack):
     """
 
     def attack(self):
-        surrogate = GraphSAGE(self.feature_number, 16, self.label_number)
+        surrogate = GraphSAGE(self.feature_number, 16, self.label_number).to(self.device)
         optimizer = torch.optim.Adam(surrogate.parameters(), lr=0.01)
         for _ in tqdm(range(200)):
             surrogate.train()
@@ -178,8 +178,8 @@ class DFEATypeIII(DFEAAttack):
     """
 
     def attack(self):
-        s1 = GCN(self.feature_number, self.label_number)
-        s2 = GraphSAGE(self.feature_number, 16, self.label_number)
+        s1 = GCN(self.feature_number, self.label_number).to(self.device)
+        s2 = GraphSAGE(self.feature_number, 16, self.label_number).to(self.device)
         opt1 = torch.optim.Adam(s1.parameters(), lr=0.01)
         opt2 = torch.optim.Adam(s2.parameters(), lr=0.01)
         for _ in tqdm(range(200)):

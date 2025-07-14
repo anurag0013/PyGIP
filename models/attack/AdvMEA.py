@@ -11,14 +11,11 @@ from models.attack.base import BaseAttack
 from models.nn import GCN
 from utils.metrics import GraphNeuralNetworkMetric
 
-# Use device from base class
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class AdvMEA(BaseAttack):
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction, model_path)
-        self.graph = dataset.graph_data.to(device)
+        self.graph = dataset.graph_data.to(self.device)
         self.features = self.graph.ndata['feat']
         self.labels = self.graph.ndata['label']
         self.train_mask = self.graph.ndata['train_mask']
@@ -39,10 +36,10 @@ class AdvMEA(BaseAttack):
         Load a pre-trained model.
         """
         # Create the model
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
 
         # Load the saved state dict
-        self.net1.load_state_dict(torch.load(model_path, map_location=device))
+        self.net1.load_state_dict(torch.load(model_path, map_location=self.device))
 
         # Set to evaluation mode
         self.net1.eval()
@@ -52,7 +49,7 @@ class AdvMEA(BaseAttack):
         Train the target model (GCN) on the original graph.
         """
         # Initialize GNN model
-        self.net1 = GCN(self.num_features, self.num_classes).to(device)
+        self.net1 = GCN(self.num_features, self.num_classes).to(self.device)
         optimizer = torch.optim.Adam(self.net1.parameters(), lr=0.01, weight_decay=5e-4)
 
         # Training loop
@@ -139,8 +136,8 @@ class AdvMEA(BaseAttack):
 
         src, dst = As.nonzero(as_tuple=True)
         initial_num_nodes = Xs.shape[0]
-        initial_graph = dgl.graph((src, dst), num_nodes=initial_num_nodes).to(device)
-        initial_graph.ndata['feat'] = Xs.to(device)
+        initial_graph = dgl.graph((src, dst), num_nodes=initial_num_nodes).to(self.device)
+        initial_graph.ndata['feat'] = Xs.to(self.device)
 
         self.net1.eval()
         with torch.no_grad():
@@ -165,8 +162,8 @@ class AdvMEA(BaseAttack):
                 SX.append(Xc)
 
                 src, dst = Ac.nonzero(as_tuple=True)
-                subgraph = dgl.graph((src, dst), num_nodes=num_nodes).to(device)
-                subgraph.ndata['feat'] = Xc.to(device)
+                subgraph = dgl.graph((src, dst), num_nodes=num_nodes).to(self.device)
+                subgraph.ndata['feat'] = Xc.to(self.device)
 
                 self.net1.eval()
                 with torch.no_grad():
@@ -193,11 +190,11 @@ class AdvMEA(BaseAttack):
 
         src, dst = AG_combined[0], AG_combined[1]
         num_total_nodes = XG.shape[0]
-        sub_g = dgl.graph((src, dst), num_nodes=num_total_nodes).to(device)
-        sub_g.ndata['feat'] = XG.to(device)
+        sub_g = dgl.graph((src, dst), num_nodes=num_total_nodes).to(self.device)
+        sub_g.ndata['feat'] = XG.to(self.device)
 
         # Create and train the extracted model
-        net6 = GCN(XG.shape[1], self.num_classes).to(device)
+        net6 = GCN(XG.shape[1], self.num_classes).to(self.device)
         optimizer = torch.optim.Adam(net6.parameters(), lr=0.01, weight_decay=5e-4)
 
         dur = []
@@ -212,7 +209,7 @@ class AdvMEA(BaseAttack):
             net6.train()
             logits = net6(sub_g, sub_g.ndata['feat'])
             out = torch.log_softmax(logits, dim=1)
-            loss = F.nll_loss(out, SL.to(device))
+            loss = F.nll_loss(out, SL.to(self.device))
 
             optimizer.zero_grad()
             loss.backward()

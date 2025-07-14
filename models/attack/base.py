@@ -1,10 +1,16 @@
 from abc import ABC, abstractmethod
 
+import torch
+
 from datasets import Dataset
+from utils.hardware import get_device
 
 
 class BaseAttack(ABC):
-    def __init__(self, dataset: Dataset, attack_node_fraction: float = None, model_path: str = None):
+    def __init__(self, dataset: Dataset, attack_node_fraction: float = None, model_path: str = None,
+                 device: str | torch.device | None = None):
+        self.device = torch.device(device) if device else get_device()
+
         # graph data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset
