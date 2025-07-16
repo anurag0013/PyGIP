@@ -4,11 +4,22 @@ import torch
 from dgl import DGLGraph
 from dgl.data import AmazonCoBuyComputerDataset  # Amazon-Computer
 from dgl.data import AmazonCoBuyPhotoDataset  # Amazon-Photo
+from dgl.data import FakeNewsDataset
+from dgl.data import FlickrDataset
+from dgl.data import GINDataset
+from dgl.data import MUTAGDataset
+from dgl.data import RedditDataset
+from dgl.data import YelpDataset
 from dgl.data import citation_graph  # Cora, CiteSeer, PubMed
 from sklearn.model_selection import StratifiedShuffleSplit
 from torch_geometric.data import Data as PyGData
 from torch_geometric.datasets import Amazon  # Amazon Computers, Photo
+from torch_geometric.datasets import FacebookPagePage
+from torch_geometric.datasets import Flickr as FlickrPyG
+from torch_geometric.datasets import LastFMAsia
 from torch_geometric.datasets import Planetoid  # Cora, CiteSeer, PubMed
+from torch_geometric.datasets import PolBlogs as PolBlogsPyG
+from torch_geometric.datasets import Reddit
 from torch_geometric.datasets import TUDataset  # ENZYMES
 
 
@@ -60,6 +71,15 @@ class Dataset(object):
         self.num_nodes = 0
         self.num_features = 0
         self.num_classes = 0
+
+        if self.api_type == 'dgl':
+            self.load_dgl_data()
+        elif self.api_type == 'pyg':
+            self.load_pyg_data()
+        else:
+            raise ValueError("Unsupported api_type.")
+
+        self._load_meta_data()
 
     def get_name(self):
         return self.__class__.__name__
@@ -149,97 +169,62 @@ class Cora(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
     def load_dgl_data(self):
         dataset = citation_graph.load_cora()
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
     def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='Cora')
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
 
 class CiteSeer(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
     def load_dgl_data(self):
         dataset = citation_graph.load_citeseer()
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
     def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='Citeseer')
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
 
 class PubMed(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
     def load_dgl_data(self):
         dataset = citation_graph.load_pubmed()
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
     def load_pyg_data(self):
         dataset = Planetoid(root=self.path, name='PubMed')
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
 
 class Computers(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
     def load_dgl_data(self):
         dataset = AmazonCoBuyComputerDataset(raw_dir=self.path)
         data = dataset[0]
         self.graph_dataset = dataset
-        self.graph_data = data
-        self._load_meta_data()
+        self.graph_data = dgl.add_self_loop(data)
 
         self._generate_train_test_masks()
 
@@ -248,7 +233,6 @@ class Computers(Dataset):
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
         self._generate_train_test_masks()
 
@@ -257,19 +241,11 @@ class Photo(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
 
-        if self.api_type == 'dgl':
-            self.load_dgl_data()
-        elif self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Unsupported api_type.")
-
     def load_dgl_data(self):
         dataset = AmazonCoBuyPhotoDataset(raw_dir=self.path)
         data = dataset[0]
         self.graph_dataset = dataset
-        self.graph_data = data
-        self._load_meta_data()
+        self.graph_data = dgl.add_self_loop(data)
 
         self._generate_train_test_masks()
 
@@ -278,7 +254,6 @@ class Photo(Dataset):
         data = dataset[0]
         self.graph_dataset = dataset
         self.graph_data = data
-        self._load_meta_data()
 
         self._generate_train_test_masks()
 
@@ -286,11 +261,6 @@ class Photo(Dataset):
 class ENZYMES(Dataset):
     def __init__(self, api_type='dgl', path='./data'):
         super().__init__(api_type, path)
-
-        if self.api_type == 'pyg':
-            self.load_pyg_data()
-        else:
-            raise ValueError("Only pyg api_type is supported for ENZYMES.")
 
     def load_pyg_data(self):
         dataset = TUDataset(root=self.path, name='ENZYMES')
@@ -304,3 +274,155 @@ class ENZYMES(Dataset):
         train_idx, test_idx = next(splitter.split(np.zeros(len(all_labels)), all_labels))
         self.train_data = [data_list[i] for i in train_idx]
         self.test_data = [data_list[i] for i in test_idx]
+
+
+class Facebook(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_pyg_data(self):
+        dataset = FacebookPagePage(root=self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+
+
+class Flickr(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = FlickrDataset(raw_dir=self.path)
+        self.graph_dataset = dataset
+        self.graph_data = dataset[0]
+
+    def load_pyg_data(self):
+        dataset = FlickrPyG(root=self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+
+
+class PolBlogs(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_pyg_data(self):
+        dataset = PolBlogsPyG(root=self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+        self._generate_train_test_masks()
+
+
+class LastFM(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_pyg_data(self):
+        dataset = LastFMAsia(root=self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+
+
+class Reddit(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = RedditDataset(raw_dir=self.path)
+        self.graph_dataset = dataset
+        self.graph_data = dataset[0]
+
+    def load_pyg_data(self):
+        dataset = Reddit(self.path)
+        data = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = data
+
+
+class Twitter(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = FakeNewsDataset('gossipcop', 'bert', raw_dir=self.path)
+        graph, _ = dataset[0]
+        self.graph_dataset = dataset
+        self.graph_data = dgl.add_self_loop(graph)
+
+
+class MUTAG(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = MUTAGDataset(raw_dir=self.path)
+        self.graph_dataset = dataset
+        self.graph_data = dataset[0]
+
+
+class PTC(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = GINDataset(name='PTC', raw_dir=self.path, self_loop=False)
+        graph, _ = zip(*[dataset[i] for i in range(16)])
+        self.graph_dataset = dataset
+        self.graph_data = dgl.batch(graph)
+
+
+class NCI1(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = GINDataset(name='NCI1', raw_dir=self.path, self_loop=False)
+        graph, _ = zip(*[dataset[i] for i in range(16)])
+        self.graph_dataset = dataset
+        self.graph_data = dgl.batch(graph)
+
+
+class PROTEINS(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = GINDataset(name='PROTEINS', raw_dir=self.path, self_loop=False)
+        graph, _ = zip(*[dataset[i] for i in range(16)])
+        self.graph_dataset = dataset
+        self.graph_data = dgl.batch(graph)
+
+
+class Collab(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = GINDataset(name='COLLAB', raw_dir=self.path, self_loop=False)
+        graph, _ = zip(*[dataset[i] for i in range(16)])
+        self.graph_dataset = dataset
+        self.graph_data = dgl.batch(graph)
+
+
+class IMDB(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = GINDataset(name='IMDB-BINARY', raw_dir=self.path, self_loop=False)
+        graph, _ = zip(*[dataset[i] for i in range(16)])
+        self.graph_dataset = dataset
+        self.graph_data = dgl.batch(graph)
+
+
+class YelpData(Dataset):
+    def __init__(self, api_type='dgl', path='./data'):
+        super().__init__(api_type, path)
+
+    def load_dgl_data(self):
+        dataset = YelpDataset(raw_dir=self.path)
+        self.graph_dataset = dataset
+        self.graph_data = dataset[0]
