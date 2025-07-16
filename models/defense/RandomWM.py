@@ -25,6 +25,7 @@ class RandomWM(BaseDefense):
     - Evaluating effectiveness against attacks
     - Dynamic selection of attack methods
     """
+    supported_api_types = {"dgl"}
 
     def __init__(self, dataset, attack_node_fraction=0.2, wm_node=50, pr=0.2, pg=0.2, attack_name=None):
         """
@@ -46,7 +47,6 @@ class RandomWM(BaseDefense):
             Name of the attack class to use (default: None, will use ModelExtractionAttack0)
         """
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'dgl', "only support dgl dataset"
         self.attack_name = attack_name or "ModelExtractionAttack0"
         self.dataset = dataset
         self.graph = dataset.graph_data

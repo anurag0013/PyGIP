@@ -1350,10 +1350,10 @@ from datasets import Dataset
 
 
 class CEGA(BaseAttack):
+    supported_api_types = {"dgl"}
+
     def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
-        """Base class for all attack implementations."""
-        super(CEGA, self).__init__(dataset)
-        assert dataset.api_type == 'dgl', "only support dgl api"
+        super(CEGA, self).__init__(dataset, attack_node_fraction, model_path)
         # graph data
         self.dataset = dataset
         self.graph = dataset.graph_data.to(self.device)

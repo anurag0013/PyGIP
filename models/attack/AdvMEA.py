@@ -13,6 +13,8 @@ from utils.metrics import GraphNeuralNetworkMetric
 
 
 class AdvMEA(BaseAttack):
+    supported_api_types = {"dgl"}
+
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction, model_path)
         self.graph = dataset.graph_data.to(self.device)

@@ -669,13 +669,11 @@ def custom_reward_function(predicted, label, predicted_distribution=None):
 
 
 class ATOM(BaseDefense):
+    supported_api_types = {"pyg"}
+    supported_datasets = {"Cora", "CiteSeer", "PubMed"}
+
     def __init__(self, dataset: PyGIPDataset, attack_node_fraction: float = 0):
-        """Base class for all defense implementations."""
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'pyg'
-        support_dataset = {'Cora', 'CiteSeer', 'PubMed'}
-        assert dataset.__class__.__name__ in support_dataset
-        self.dataset = dataset
 
     def _load_data_and_model(self, dataset, batch_size=16, seed=0, lamb=0):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -720,7 +718,7 @@ class ATOM(BaseDefense):
         lr = config.get("lr", 1e-3)
         gamma = config.get("gamma", 0.99)
         lam = config.get("lam", 0.95)
-        num_epochs = config.get("num_epochs", 2)
+        num_epochs = config.get("num_epochs", 2)  # TODO 50, 100, 150
         save_dir = config.get('save_dir', None)
         csv_path = config.get("csv_path", None)
         data_path = config.get("data_path", "CiteSeer")
@@ -733,9 +731,10 @@ class ATOM(BaseDefense):
         set_seed(seed_now)
 
         train_loader, val_loader, test_loader, target_model, max_k_core, all_embeddings, data = self._load_data_and_model(
+            # TODO allow attack generate query
             self.dataset)
 
-        input_size = data.num_classes  # todo change func name
+        input_size = data.num_classes
         embedding_dim = input_size
         gru = FusionGRU(input_size=input_size, hidden_size=hidden_size).to(device)
         mlp_transform = StateTransformMLP(action_dim, hidden_action_dim, hidden_size).to(device)

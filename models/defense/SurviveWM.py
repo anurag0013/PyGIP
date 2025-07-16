@@ -14,9 +14,10 @@ from utils.metrics import GraphNeuralNetworkMetric
 
 
 class SurviveWM(BaseDefense):
+    supported_api_types = {"dgl"}
+
     def __init__(self, dataset, attack_node_fraction, model_path=None):
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'dgl', 'only support dgl dataset'
         # load graph data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_data

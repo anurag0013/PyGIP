@@ -15,14 +15,11 @@ from utils.metrics import GraphNeuralNetworkMetric
 
 
 class ModelExtractionAttack(BaseAttack):
-    def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
-        # check dataset
-        support_datasets = {"Cora", "CiteSeer", "PubMed"}
-        assert dataset.__class__.__name__ in support_datasets, f"{dataset.__class__.__name__} is not supported."
-        # check api type
-        assert dataset.api_type == 'dgl', f"{dataset.api_type} is not supported."
-        super().__init__(dataset, attack_node_fraction, model_path)
+    supported_api_types = {"dgl"}
+    supported_datasets = {"Cora", "CiteSeer", "PubMed"}
 
+    def __init__(self, dataset, attack_node_fraction, model_path=None, alpha=0.8):
+        super().__init__(dataset, attack_node_fraction, model_path)
         self.alpha = alpha
         self.graph = dataset.graph_data.to(self.device)
         self.features = self.graph.ndata['feat']

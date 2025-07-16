@@ -26,13 +26,9 @@ class GraphGenerator:
 
 
 class DFEAAttack(BaseAttack):
-    """
-    Data-Free Extraction Attack base class.
-    Handles victim model training/loading and synthetic graph generation.
-    """
+    supported_api_types = {"dgl"}
 
     def __init__(self, dataset, attack_node_fraction, model_path=None):
-        assert dataset.api_type == 'dgl', "only support dgl api"
         super().__init__(dataset, attack_node_fraction, model_path)
         # load graph data
         self.graph = dataset.graph_data.to(self.device)

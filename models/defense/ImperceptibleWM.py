@@ -12,10 +12,10 @@ from .base import BaseDefense
 
 
 class ImperceptibleWM(BaseDefense):
+    supported_datasets = {"pyg"}
 
     def __init__(self, dataset, attack_node_fraction=0.3, model_path=None):
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'pyg', 'only support pyg dataset'
         # load data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset

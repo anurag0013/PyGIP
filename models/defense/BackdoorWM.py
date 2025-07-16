@@ -10,9 +10,10 @@ from utils.metrics import GraphNeuralNetworkMetric
 
 
 class BackdoorWM(BaseDefense):
+    supported_datasets = {"dgl"}
+
     def __init__(self, dataset, attack_node_fraction, model_path=None, trigger_rate=0.01, l=20, target_label=0):
         super().__init__(dataset, attack_node_fraction)
-        assert dataset.api_type == 'dgl', "only support dgl dataset"
         # load data
         self.dataset = dataset
         self.graph_dataset = dataset.graph_dataset
