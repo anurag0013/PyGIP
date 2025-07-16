@@ -38,6 +38,9 @@ of `BaseAttack`:
 
 ```python
 class BaseAttack(ABC):
+    supported_api_types = set()
+    supported_datasets = set()
+
     def __init__(self, dataset: Dataset, attack_node_fraction: float = None, model_path: str = None,
                  device: Optional[Union[str, torch.device]] = None):
         self.device = torch.device(device) if device else get_device()
@@ -56,6 +59,8 @@ class BaseAttack(ABC):
         # params
         self.attack_node_fraction = attack_node_fraction
         self.model_path = model_path
+
+        self._check_dataset_compatibility()
 ```
 
 To implement your own attack:
@@ -85,6 +90,9 @@ You need to implement following methods:
 
 ```python
 class MyCustomAttack(BaseAttack):
+    supported_api_types = {"pyg"}  # "pyg" or "dgl"
+    supported_datasets = {"Cora"}  # you can leave this blank if your method supports all datasets 
+
     def __init__(self, dataset: Dataset, attack_node_fraction: float, model_path: str = None):
         super().__init__(dataset, attack_node_fraction, model_path)
         # Additional initialization if needed
@@ -120,6 +128,9 @@ of `BaseDefense`:
 
 ```python
 class BaseDefense(ABC):
+    supported_api_types = set()
+    supported_datasets = set()
+
     def __init__(self, dataset: Dataset, attack_node_fraction: float,
                  device: Optional[Union[str, torch.device]] = None):
         self.device = torch.device(device) if device else get_device()
@@ -137,6 +148,8 @@ class BaseDefense(ABC):
 
         # params
         self.attack_node_fraction = attack_node_fraction
+
+        self._check_dataset_compatibility()
 ```
 
 To implement your own defense:
@@ -168,6 +181,9 @@ You need to implement following methods:
 
 ```python
 class MyCustomDefense(BaseDefense):
+    supported_api_types = {"pyg"}  # "pyg" or "dgl"
+    supported_datasets = {"Cora"}  # you can leave this blank if your method supports all datasets 
+
     def defend(self):
         # Step 1: Train target model
         target_model = self._train_target_model()
