@@ -6,13 +6,13 @@ import torch.nn.functional as F
 from sklearn.metrics import precision_score, recall_score, f1_score
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
-
+from tqdm import tqdm
 from models.nn.backbones import GCN_PyG
 from .base import BaseDefense
 
 
 class ImperceptibleWM(BaseDefense):
-    supported_datasets = {"pyg"}
+    supported_api_types = {"pyg"}
 
     def __init__(self, dataset, attack_node_fraction=0.3, model_path=None):
         super().__init__(dataset, attack_node_fraction)
@@ -36,7 +36,9 @@ class ImperceptibleWM(BaseDefense):
         bi_level_optimization(self.model, self.generator, pyg_data)
         trigger_data = generate_trigger_graph(pyg_data, self.generator, self.model)
         metrics = calculate_metrics(self.model, trigger_data)
-        print(metrics)
+        print("========================Final results:=========================================")
+        for name, value in metrics.items():
+            print(f"{name}: {value:.4f}")
         return metrics
 
     def _load_model(self):
@@ -131,7 +133,7 @@ def bi_level_optimization(target_model, generator, data, epochs=100, inner_steps
     optimizer_gen = torch.optim.Adam(generator.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss()
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
         for _ in range(inner_steps):
             optimizer_model.zero_grad()
             trigger_data = generate_trigger_graph(data, generator, target_model)
@@ -198,6 +200,6 @@ def calculate_metrics(model, data):
             wm_mask[data.trigger_nodes] = True
             wm_pred = pred[wm_mask]
             wm_true = true[wm_mask]
-            metrics['wm_accuracy'] = (wm_pred == wm_true).float().mean().item() * 100
+            metrics['wm_accuracy'] = (wm_pred == wm_true).float().mean().item()
 
         return metrics

@@ -833,6 +833,8 @@ class ATOM(BaseDefense):
             "auc_std": np.std(auc_value_list)
         }
 
-        print(report_metrics)
+        print("==============================Final results==============================")
+        for name, value in report_metrics.items():
+            print(f"{name}: {value:.4f}")
 
         return report_metrics

@@ -1,4 +1,105 @@
+from abc import ABC, abstractmethod
+
 import torch
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+
+
+class MetricBase(ABC):
+    def __init__(self):
+        self.preds = []
+        self.labels = []
+        self.reset()
+
+    @abstractmethod
+    def update(self, preds, labels, **kwargs):
+        """Update internal metric state."""
+        pass
+
+    @abstractmethod
+    def compute(self):
+        """Compute and return all metric results."""
+        pass
+
+    @abstractmethod
+    def reset(self):
+        """Reset internal state."""
+        self.preds = []
+        self.labels = []
+
+    @staticmethod
+    def compute_default_metrics(preds, labels):
+        return {
+            'Acc': accuracy_score(labels, preds),
+            'F1': f1_score(labels, preds, average='macro'),
+            'Precision': precision_score(labels, preds, average='macro'),
+            'Recall': recall_score(labels, preds, average='macro'),
+            'AUROC': roc_auc_score(labels, preds, multi_class='ovr')
+        }
+
+    @staticmethod
+    def compute_fidelity(output1, output2):
+        return {
+            'Fidelity': (output1.argmax(dim=1) == output2.argmax(dim=1)).float().mean().item()
+        }
+
+    @staticmethod
+    def compute_auc(preds, labels):
+        return {
+            'AUC': roc_auc_score(labels, preds)
+        }
+
+    def print(self):
+        results = self.compute()
+        for name, value in results.items():
+            print(f"{name}: {value:.4f}")
+
+
+class AttackMetric(MetricBase):
+    def __init__(self):
+        super().__init__()
+
+    def update(self, preds, labels, target_outputs=None, surrogate_outputs=None):
+        self.preds.append(preds.detach().cpu())
+        self.labels.append(labels.detach().cpu())
+
+    def compute(self):
+        preds = torch.cat(self.preds).numpy()
+        labels = torch.cat(self.labels).numpy()
+        results = self.compute_default_metrics(preds, labels)
+        return results
+
+
+class DefenseMetric(MetricBase):
+    def __init__(self):
+        super().__init__()
+        self.target_preds = []
+        self.target_labels = []
+        self.surrogate_outputs = []
+
+    def update_target(self, target_preds, target_labels):
+        ...
+
+    def update_defense_task(self, defense_preds, defense_labels):
+        ...
+
+    def update_defense_wm(self, wm_preds, wm_labels):
+        ...
+
+    def update_surrogate_task(self, surrogate_preds, surrogate_labels):
+        ...
+
+    def update_surrogate_wm(self, wm_preds, wm_labels):
+        ...
+
+    def update(self, preds, labels, target_outputs=None, surrogate_outputs=None):
+        self.preds.append(preds.detach().cpu())
+        self.labels.append(labels.detach().cpu())
+
+    def compute(self):
+        preds = torch.cat(self.preds).numpy()
+        labels = torch.cat(self.labels).numpy()
+        results = self.compute_default_metrics(preds, labels)
+        return results
 
 
 class GraphNeuralNetworkMetric:
