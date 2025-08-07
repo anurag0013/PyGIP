@@ -31,6 +31,14 @@ class Dataset(object):
   sure
   to use our defined Dataset class to build your code.
 
+### Device
+
+To ensure consistency and simplicity when managing CUDA devices across attacks and defenses, we follow the convention below:
+- Both `BaseAttack` and `BaseDefense` define the device attribute `self.device` in their `__init__()` method.
+- Subclasses should not manually redefine or modify the device logic.
+- If you are implementing a custom attack or defense class, simply inherit from BaseAttack or BaseDefense.
+- You can directly access the device using: `x = x.to(self.device)`
+
 ### Implementing Attack
 
 To create a custom attack, you need to extend the abstract base class `BaseAttack`. Here’s the structure

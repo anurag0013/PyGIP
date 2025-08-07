@@ -1,9 +1,8 @@
 from datasets import Cora, PubMed
-from models.attack import CEGA as MEA
-from models.defense import ATOM as MEAD
+from models.attack import ModelExtractionAttack0 as MEA
 
-dataset = Cora(api_type='pyg')
+dataset = Cora(api_type='dgl')
 print(dataset)
 
-mea = MEAD(dataset, attack_node_fraction=0.1)
-mea.defend()
+mea = MEA(dataset, attack_node_fraction=0.1)
+mea.attack()
